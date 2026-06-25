@@ -153,7 +153,7 @@ function qCalcRow(r,s,catalog){
       care=r0(directBase*s.rCare/100), bizTax=r0(health*s.rBizTax/100);
   var indirectSum = pension+accident+health+employ+care+bizTax;
   /* 기타비용 — 직군 카탈로그 단가 × 수량 (1인당), 카탈로그 변경 시 자동 반영 */
-  var ar=(catalog&&catalog[r.area])||{gen:[],oth:[]};
+  var ar=(catalog&&(catalog[r.area]||catalog[Q_AREAS[0]]))||{gen:[],oth:[]};
   var etcGenPer=(r.genItems||[]).reduce(function(a,g){return a+qUnit(ar.gen,g.nm)*(Number(g.qty)||0);},0);
   var etcOthPer=(r.othItems||[]).reduce(function(a,o){return a+qUnit(ar.oth,o.nm)*(Number(o.qty)||0);},0);
   return {baseHours:baseHours,stdHours:stdHours,common:common,hourly:hourly,ot:ot,nt:nt,annual:annual,
@@ -205,7 +205,7 @@ function qExportExcel(rows,s,agg,catalog){
   h+="<br/><table style='border-collapse:collapse;font-family:맑은 고딕;font-size:12px;'><tr><td colspan='5' style='font-weight:bold;padding:6px;'>[ 기타비용 내역 (직군별, 1인당 단가) ]</td></tr>";
   h+="<tr><th style='"+th+"'>직군</th><th style='"+th+"'>구분</th><th style='"+th+"'>항목</th><th style='"+th+"'>단가 × 수량</th><th style='"+th+"'>1인당 금액</th></tr>";
   rows.forEach(function(r){
-    var ar=(catalog&&catalog[r.area])||{gen:[],oth:[]};
+    var ar=(catalog&&(catalog[r.area]||catalog[Q_AREAS[0]]))||{gen:[],oth:[]};
     (r.genItems||[]).forEach(function(g){ var u=qUnit(ar.gen,g.nm); h+="<tr><td style='"+tdL+"'>"+(r.label||"")+"</td><td style='"+tdL+"'>제경비</td><td style='"+tdL+"'>"+(g.nm||"")+"</td><td style='"+td+"'>"+nf(u)+" × "+(Number(g.qty)||0)+"</td><td style='"+td+"'>"+nf(u*(Number(g.qty)||0))+"</td></tr>"; });
     (r.othItems||[]).forEach(function(o){ var u=qUnit(ar.oth,o.nm); h+="<tr><td style='"+tdL+"'>"+(r.label||"")+"</td><td style='"+tdL+"'>기타경비</td><td style='"+tdL+"'>"+(o.nm||"")+"</td><td style='"+td+"'>"+nf(u)+" × "+(Number(o.qty)||0)+"</td><td style='"+td+"'>"+nf(u*(Number(o.qty)||0))+"</td></tr>"; });
   });
@@ -219,6 +219,16 @@ function qExportExcel(rows,s,agg,catalog){
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
 }
 
+/* 목표 총액(부가세별도)에 맞는 기본급여 배율을 이분법으로 역산 */
+function qFindFactor(rows,s,catalog,target){
+  if(!(target>0)) return 1;
+  function tot(f){ return qCalcAll(rows.map(function(r){return Object.assign({},r,{basic:r0((Number(r.basic)||0)*f)});}),s,catalog).totalExVat; }
+  var lo=0, hi=1;
+  var guard=0; while(tot(hi)<target && hi<100000 && guard<40){ hi*=2; guard++; }
+  for(var i=0;i<50;i++){ var mid=(lo+hi)/2; if(tot(mid)<target) lo=mid; else hi=mid; }
+  return (lo+hi)/2;
+}
+
 function NameCell(p){ return <td style={Object.assign({},tdL,{fontWeight:600,position:"sticky",left:0,background:"#fff",borderRight:"1px solid "+LINE})}>{p.label||<span style={{color:SUB,fontWeight:400}}>(직군명)</span>} <span style={{color:SUB,fontWeight:400}}>×{p.count}</span></td>; }
 
 function QuotationPage(){
@@ -229,6 +239,7 @@ function QuotationPage(){
   var _scat=useState(false), showCat=_scat[0], setShowCat=_scat[1];
   var _ctab=useState("시설"), catTab=_ctab[0], setCatTab=_ctab[1];
   var _sp=useState(0), simPct=_sp[0], setSimPct=_sp[1];
+  var _t2=useState(""), simTarget2=_t2[0], setSimTarget2=_t2[1];
   var _ts=useState(null), toast=_ts[0], setToast=_ts[1];
   var _ti=useState(""), title=_ti[0], setTitle=_ti[1];
   var _hi=useState(function(){return loadHist();}), hist=_hi[0], setHist=_hi[1];
@@ -242,6 +253,10 @@ function QuotationPage(){
   var simFactor=1+simPct/100;
   var simRows=useMemo(function(){return rows.map(function(r){return Object.assign({},r,{basic:r0((Number(r.basic)||0)*simFactor)});});},[rows,simFactor]);
   var simAgg=useMemo(function(){return qCalcAll(simRows,set,catalog);},[simRows,set,catalog]);
+  /* 시뮬레이션 2: 목표금액 → 기본급여 배율 역산 */
+  var simFactor2=useMemo(function(){return (!(Number(simTarget2)>0))?1:qFindFactor(rows,set,catalog,Number(simTarget2));},[rows,set,catalog,simTarget2]);
+  var simRows2=useMemo(function(){return rows.map(function(r){return Object.assign({},r,{basic:r0((Number(r.basic)||0)*simFactor2)});});},[rows,simFactor2]);
+  var simAgg2=useMemo(function(){return qCalcAll(simRows2,set,catalog);},[simRows2,set,catalog]);
 
   /* 인원 행 */
   function updRow(id,k,v){ setRows(function(p){return p.map(function(r){return r.id===id?Object.assign({},r,mk(k,v)):r;});}); }
@@ -276,8 +291,9 @@ function QuotationPage(){
 
   function applySim(){ setRows(simRows); setSimPct(0); doToast("조정된 기본급여가 적용되어 ①~⑥ 전체에 반영되었습니다."); }
   function resetSim(){ setSimPct(0); doToast("기준(0%)으로 초기화"); }
+  function applySim2(){ setRows(simRows2); setSimTarget2(""); doToast("목표금액에 맞춰 기본급여가 적용되어 ①~⑥ 전체에 반영되었습니다."); }
   function doSave(){ var id=curHistId&&hist.some(function(x){return x.id===curHistId;})?curHistId:uid("h"); var e={id:id,title:title||"제목 없음",savedAt:new Date().toLocaleString("ko-KR"),total:agg.totalExVat,head:agg.totalHead,rows:clone(rows),set:clone(set),catalog:clone(catalog)}; var nh=[e].concat(hist.filter(function(x){return x.id!==id;})); setHist(nh); saveHistLS(nh); setCurHistId(id); doToast("견적서가 저장되었습니다."); }
-  function doLoadHist(e){ setRows(clone(e.rows||[])); setSet(clone(e.set||Q_DEF_SET)); setDraft(qPick(e.set||Q_DEF_SET)); if(e.catalog) setCatalog(clone(e.catalog)); setTitle(e.title||""); setCurHistId(e.id); setSimPct(0); doToast("저장된 견적서를 불러왔습니다."); }
+  function doLoadHist(e){ var rs=(e.rows||[]).map(function(r){return Object.assign({},r,{area:(Q_AREAS.indexOf(r.area)>=0?r.area:Q_AREAS[0])});}); setRows(clone(rs)); setSet(clone(e.set||Q_DEF_SET)); setDraft(qPick(e.set||Q_DEF_SET)); if(e.catalog) setCatalog(clone(e.catalog)); setTitle(e.title||""); setCurHistId(e.id); setSimPct(0); setSimTarget2(""); doToast("저장된 견적서를 불러왔습니다."); }
   function newQuote(){ setRows([]); setTitle(""); setCurHistId(null); setSimPct(0); doToast("새 견적서를 시작합니다."); }
   function doDelHist(id){ var nh=hist.filter(function(x){return x.id!==id;}); setHist(nh); saveHistLS(nh); if(curHistId===id) setCurHistId(null); doToast("삭제되었습니다."); }
 
@@ -425,7 +441,7 @@ function QuotationPage(){
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}><span style={{fontSize:12,fontWeight:700,color:INK}}>제경비 (1인당)</span><button style={bSm} onClick={function(){addGenItem(r.id);}}>+ 행 추가</button></div>
                   <table style={stbl}><thead><tr><th style={Object.assign({},thL,{fontSize:10.5})}>종류</th><th style={Object.assign({},thS,{fontSize:10.5})}>단가(자동)</th><th style={Object.assign({},thS,{fontSize:10.5})}>수량</th><th style={Object.assign({},thS,{fontSize:10.5})}>금액</th><th style={thC}></th></tr></thead>
                     <tbody>{r.genItems.map(function(g){
-                      var cg=(catalog[r.area]&&catalog[r.area].gen)||[];
+                      var arc=catalog[r.area]||catalog[Q_AREAS[0]]||{gen:[],oth:[]}; var cg=arc.gen||[];
                       var gu=qUnit(cg,g.nm);
                       return <tr key={g.id}>
                         <td style={tdL}><select value={g.nm} onChange={function(e){selGenItem(r.id,g.id,e.target.value);}} style={{width:118,padding:"6px",borderRadius:5,border:"1px solid "+LINE,fontSize:12}}><option value="">종류 선택</option>{cg.map(function(x){return <option key={x.id} value={x.nm}>{x.nm}</option>;})}</select></td>
@@ -442,7 +458,7 @@ function QuotationPage(){
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}><span style={{fontSize:12,fontWeight:700,color:INK}}>기타경비 (1인당)</span><button style={bSm} onClick={function(){addOthItem(r.id);}}>+ 행 추가</button></div>
                   <table style={stbl}><thead><tr><th style={Object.assign({},thL,{fontSize:10.5})}>종류</th><th style={Object.assign({},thS,{fontSize:10.5})}>단가(자동)</th><th style={Object.assign({},thS,{fontSize:10.5})}>수량</th><th style={Object.assign({},thS,{fontSize:10.5})}>금액</th><th style={thC}></th></tr></thead>
                     <tbody>{r.othItems.map(function(o){
-                      var co=(catalog[r.area]&&catalog[r.area].oth)||[];
+                      var arc2=catalog[r.area]||catalog[Q_AREAS[0]]||{gen:[],oth:[]}; var co=arc2.oth||[];
                       var ou=qUnit(co,o.nm);
                       return <tr key={o.id}>
                         <td style={tdL}><select value={o.nm} onChange={function(e){selOthItem(r.id,o.id,e.target.value);}} style={{width:118,padding:"6px",borderRadius:5,border:"1px solid "+LINE,fontSize:12}}><option value="">종류 선택</option>{co.map(function(x){return <option key={x.id} value={x.nm}>{x.nm}</option>;})}</select></td>
@@ -505,7 +521,7 @@ function QuotationPage(){
       {/* 시뮬레이션 — 기본급여 ±50% 조정 */}
       {!empty && <div style={Object.assign({},card,{borderTop:"3px solid "+BLUE})}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-          <span style={secTt}>견적 시뮬레이션 (기본급여 ±50% 조정)</span>
+          <span style={secTt}>견적 시뮬레이션 1 · 기본급여 직접 조정 (±50%)</span>
           <span style={{fontSize:12,color:SUB}}>조정 = 기본급여 변경 · 적용 시 ①~⑥ 전체 반영</span>
         </div>
         <div style={{fontSize:11.5,color:SUB,marginBottom:16}}>아래 버튼이나 슬라이더로 기본급여를 ±50% 범위에서 조정하세요. 가운데(0%)가 현재 기준입니다. 조정에 따라 직접·간접인건비·이윤·총 견적금액이 함께 바뀝니다.</div>
@@ -556,6 +572,53 @@ function QuotationPage(){
           <button style={bDef} onClick={resetSim}>기준(0%)으로</button>
           <button style={Object.assign({},bPri,{opacity:simPct===0?0.5:1})} onClick={function(){if(simPct!==0)applySim();}}>✓ 적용 (①~⑥에 반영)</button>
         </div>
+      </div>}
+
+      {/* 시뮬레이션 2 — 목표금액 → 기본급여 자동 역산 */}
+      {!empty && <div style={Object.assign({},card,{borderTop:"3px solid "+BLUED})}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+          <span style={secTt}>견적 시뮬레이션 2 · 목표금액 → 기본급여 자동 역산</span>
+          <span style={{fontSize:12,color:SUB}}>목표 총액 입력 → 기본급여 자동 계산 · 적용 시 ①~⑥ 반영</span>
+        </div>
+        <div style={{fontSize:11.5,color:SUB,marginBottom:16}}>원하는 총 견적금액(부가세 별도)을 입력하면, 그 금액이 되도록 <b>기본급여를 자동으로 역산</b>해 조정합니다. 간접인건비·이윤 등 나머지 계산이 모두 따라옵니다.</div>
+        <div style={{display:"flex",gap:12,alignItems:"flex-end",flexWrap:"wrap",marginBottom:16}}>
+          <div><label style={lblS}>목표 견적금액 (부가세 별도)</label><NumInput w={210} value={simTarget2} onChange={function(v){setSimTarget2(v);}} /></div>
+          <button style={bDef} onClick={function(){setSimTarget2(agg.totalExVat);}}>현재 총액 채우기</button>
+          <button style={bDef} onClick={function(){setSimTarget2("");}}>초기화</button>
+        </div>
+        {Number(simTarget2)>0 ? <div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
+            <div style={sumCard}><div style={sumLbl}>현재 총견적</div><div style={Object.assign({},sumVal,{color:INK,fontSize:16})}>{won(agg.totalExVat)}</div></div>
+            <div style={sumCard}><div style={sumLbl}>목표 견적금액</div><div style={Object.assign({},sumVal,{fontSize:16})}>{won(simTarget2)}</div></div>
+            <div style={sumCard}><div style={sumLbl}>자동 산출 기본급여 조정율</div><div style={Object.assign({},sumVal,{color:simFactor2>=1?BLUE:WARN,fontSize:16})}>{simFactor2>=1?"+":""}{((simFactor2-1)*100).toFixed(1)}%</div></div>
+            <div style={sumCard}><div style={sumLbl}>역산 후 총견적</div><div style={Object.assign({},sumVal,{fontSize:16})}>{won(simAgg2.totalExVat)}</div><div style={{fontSize:10.5,color:SUB,marginTop:3}}>목표와 차이 {nf(simAgg2.totalExVat-Number(simTarget2))}원</div></div>
+          </div>
+          <div style={{fontSize:12.5,fontWeight:700,color:INK,marginBottom:9}}>조정 전 → 조정 후 상세 비교</div>
+          <div style={tableWrap}><table style={tbl}>
+            <thead><tr>
+              <th style={thL}>직군</th><th style={thC}>구분</th><th style={thS}>기본급여</th><th style={thS}>직접인건비</th><th style={thS}>간접인건비</th><th style={thS}>기타비용</th><th style={thS}>관리비+이윤</th><th style={thS}>부가세별도(1인)</th><th style={thS}>행 합계(부가세별도)</th>
+            </tr></thead>
+            <tbody>{rows.map(function(r,i){
+              var b=agg.calc[i], a=simAgg2.calc[i];
+              var pb=b.admin+b.profit, pa=a.admin+a.profit;
+              return [
+                <tr key={r.id+"_b2"}><td rowSpan="2" style={Object.assign({},tdL,{fontWeight:600,position:"sticky",left:0,background:"#fff",borderRight:"1px solid "+LINE})}>{r.label||<span style={{color:SUB,fontWeight:400}}>(직군명)</span>} <span style={{color:SUB,fontWeight:400}}>×{r.count}</span></td>
+                  <td style={Object.assign({},tdC,{color:SUB})}>전</td>
+                  <td style={Object.assign({},tdS,{color:SUB})}>{nf(Number(r.basic)||0)}</td><td style={Object.assign({},tdS,{color:SUB})}>{nf(b.directSum)}</td><td style={Object.assign({},tdS,{color:SUB})}>{nf(b.indirectSum)}</td><td style={Object.assign({},tdS,{color:SUB})}>{nf(b.etc)}</td><td style={Object.assign({},tdS,{color:SUB})}>{nf(pb)}</td><td style={Object.assign({},tdS,{color:SUB})}>{nf(b.exVat)}</td><td style={Object.assign({},tdS,{color:SUB})}>{nf(b.rowExVat)}</td></tr>,
+                <tr key={r.id+"_a2"}>
+                  <td style={Object.assign({},tdC,{fontWeight:700,color:BLUE})}>후</td>
+                  <td style={Object.assign({},tdS,{fontWeight:700})}>{nf(simRows2[i].basic)}</td><td style={Object.assign({},tdS,{fontWeight:700})}>{nf(a.directSum)}</td><td style={Object.assign({},tdS,{fontWeight:700})}>{nf(a.indirectSum)}</td><td style={Object.assign({},tdS,{fontWeight:700})}>{nf(a.etc)}</td><td style={Object.assign({},tdS,{fontWeight:700})}>{nf(pa)}</td><td style={Object.assign({},tdS,{fontWeight:700})}>{nf(a.exVat)}</td><td style={Object.assign({},tdS,{fontWeight:700,color:BLUE})}>{nf(a.rowExVat)}</td></tr>
+              ];
+            })}</tbody>
+            <tfoot>
+              <tr><td style={tfL} colSpan="8">조정 전 총 합계 (부가세 별도)</td><td style={Object.assign({},tfR,{color:SUB})}>{nf(agg.totalExVat)}</td></tr>
+              <tr><td style={tfL} colSpan="8">조정 후 총 합계 (부가세 별도)</td><td style={tfR}>{nf(simAgg2.totalExVat)}</td></tr>
+            </tfoot>
+          </table></div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
+            <button style={bPri} onClick={function(){applySim2();}}>✓ 적용 (①~⑥에 반영)</button>
+          </div>
+        </div> : <div style={emptyBox}>목표 견적금액을 입력하면 자동 역산 결과가 표시됩니다.</div>}
       </div>}
 
       {/* 다운로드 */}
