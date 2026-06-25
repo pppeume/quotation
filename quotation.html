@@ -73,6 +73,8 @@ var thC=Object.assign({},thS,{textAlign:"center"});
 var tdS={padding:"7px 10px",borderBottom:"1px solid "+LINE,color:INK,fontSize:12.5,textAlign:"right",whiteSpace:"nowrap"};
 var tdL=Object.assign({},tdS,{textAlign:"left"});
 var tdC=Object.assign({},tdS,{textAlign:"center"});
+var thCalc={padding:"9px 10px",textAlign:"right",fontWeight:700,color:"#fff",fontSize:11,background:"#013a73",whiteSpace:"nowrap",borderRight:"1px solid rgba(255,255,255,.14)"};
+var tdCalc=Object.assign({},tdS,{background:"#eaf2fb",color:"#013a73",fontWeight:700});
 var tfL={padding:"8px 10px",fontSize:12.5,fontWeight:700,color:INK,background:BLUEL,textAlign:"left",whiteSpace:"nowrap"};
 var tfR={padding:"8px 10px",fontSize:12.5,fontWeight:700,color:BLUE,background:BLUEL,textAlign:"right",whiteSpace:"nowrap"};
 var bPri={padding:"8px 16px",borderRadius:6,border:"none",cursor:"pointer",fontWeight:600,fontSize:13,background:BLUE,color:"#fff"};
@@ -383,7 +385,7 @@ function QuotationPage(){
         {empty ? <div style={emptyBox}>① 인원을 먼저 추가하세요.</div> :
         <div style={tableWrap}><table style={tbl}>
           <thead><tr>
-            <th style={thL}>직군</th><th style={thS}>기본급여</th><th style={thS}>직책·자격수당</th><th style={thC}>연장</th><th style={thS}>연장근로수당</th><th style={thC}>야간</th><th style={thS}>야간근로수당</th><th style={thS}>연차일</th><th style={thS}>연차수당</th><th style={thS}>퇴직충당금</th><th style={thS}>소계</th>
+            <th style={thL}>직군</th><th style={thS}>기본급여</th><th style={thS}>직책·자격수당</th><th style={thC}>연장</th><th style={thCalc}>연장근로수당 ƒ</th><th style={thC}>야간</th><th style={thCalc}>야간근로수당 ƒ</th><th style={thS}>연차일</th><th style={thCalc}>연차수당 ƒ</th><th style={thCalc}>퇴직충당금 ƒ</th><th style={thCalc}>소계 ƒ</th>
           </tr></thead>
           <tbody>{rows.map(function(r){
             var c=qCalcRow(r,set);
@@ -392,18 +394,18 @@ function QuotationPage(){
               <td style={tdS}><NumInput w={96} value={r.basic} onChange={function(v){updRow(r.id,"basic",v);}} /></td>
               <td style={tdS}><NumInput w={84} value={r.posPay} onChange={function(v){updRow(r.id,"posPay",v);}} /></td>
               <td style={tdC}><div style={{display:"flex",alignItems:"center",gap:5,justifyContent:"flex-end"}}><input type="checkbox" checked={r.otApply} onChange={function(e){updRow(r.id,"otApply",e.target.checked);}} title="적용(미체크=해당없음)" /><NumInput w={48} value={r.otHours} onChange={function(v){updRow(r.id,"otHours",v);}} /><span style={{fontSize:9.5,color:SUB}}>h</span></div></td>
-              <td style={tdS}>{r.otApply?nf(c.ot):<span style={{color:SUB}}>해당없음</span>}</td>
+              <td style={r.otApply?tdCalc:Object.assign({},tdCalc,{color:SUB,fontWeight:400})}>{r.otApply?nf(c.ot):"해당없음"}</td>
               <td style={tdC}><div style={{display:"flex",alignItems:"center",gap:5,justifyContent:"flex-end"}}><input type="checkbox" checked={r.ntApply} onChange={function(e){updRow(r.id,"ntApply",e.target.checked);}} title="적용(미체크=해당없음)" /><NumInput w={48} value={r.ntHours} onChange={function(v){updRow(r.id,"ntHours",v);}} /><span style={{fontSize:9.5,color:SUB}}>h</span></div></td>
-              <td style={tdS}>{r.ntApply?nf(c.nt):<span style={{color:SUB}}>해당없음</span>}</td>
+              <td style={r.ntApply?tdCalc:Object.assign({},tdCalc,{color:SUB,fontWeight:400})}>{r.ntApply?nf(c.nt):"해당없음"}</td>
               <td style={tdS}><NumInput w={42} value={r.annualDays} onChange={function(v){updRow(r.id,"annualDays",v);}} /></td>
-              <td style={tdS}>{nf(c.annual)}</td>
-              <td style={tdS}>{nf(c.retire)}</td>
-              <td style={Object.assign({},tdS,{fontWeight:700})}>{nf(c.directSum)}</td>
+              <td style={tdCalc}>{nf(c.annual)}</td>
+              <td style={tdCalc}>{nf(c.retire)}</td>
+              <td style={Object.assign({},tdCalc,{fontWeight:800})}>{nf(c.directSum)}</td>
             </tr>;
           })}</tbody>
           <tfoot><tr><td style={tfL}>합계</td><td colSpan="9" style={tfR}></td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.directSum*c.count;},0))}</td></tr></tfoot>
         </table></div>}
-        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.7}}>🔹 연장 = ROUND((통상시급×소정근로시간)×연장시간÷12, -1)　🔹 야간 = ROUND(야간시간×통상시급×0.5, -1)　🔹 연차 = ROUND(소정근로시간×통상시급×연차일÷12, -1)　🔹 퇴직충당금 = ROUND(소계(기본급여~연차수당)÷12, -1)</div>}
+        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.7}}><span style={{background:"#eaf2fb",color:"#013a73",fontWeight:700,padding:"1px 7px",borderRadius:4}}>ƒ 음영 = 자동 계산 항목</span> (연장·야간·연차수당, 퇴직충당금, 소계는 입력값이 아니라 아래 수식으로 자동 산출됩니다)<br/>🔹 연장 = ROUND((통상시급×소정근로시간)×연장시간÷12, -1)　🔹 야간 = ROUND(야간시간×통상시급×0.5, -1)　🔹 연차 = ROUND(소정근로시간×통상시급×연차일÷12, -1)　🔹 퇴직충당금 = ROUND(소계(기본급여~연차수당)÷12, -1)</div>}
       </div>
 
       {/* 3. 간접인건비 */}
