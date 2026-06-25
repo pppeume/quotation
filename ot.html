@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>대웅그룹 OT 운영관리 플랫폼</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏱</text></svg>">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Pretendard Variable','Noto Sans KR',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;overflow:hidden;}
+#loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#f0f2f5;z-index:9999;flex-direction:column;gap:12px;font-size:14px;color:#64748b;}
+#loading .spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#6366f1;border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#error-box{display:none;position:fixed;inset:0;background:#fef2f2;z-index:9998;padding:40px;font-family:monospace;font-size:13px;color:#991b1b;overflow:auto;}
+::-webkit-scrollbar{width:6px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+input[type=checkbox]{accent-color:#6366f1;cursor:pointer;}
+select:focus,input:focus,textarea:focus{border-color:#6366f1!important;outline:none;box-shadow:0 0 0 3px rgba(99,102,241,0.1);}
+@media print{.no-print{display:none!important;}}
+</style>
+</head>
+<body>
+<div id="loading"><div class="spinner"></div><div>대웅그룹 OT 운영관리 플랫폼 로딩중...</div></div>
+<div id="error-box"></div>
+<div id="root"></div>
+
+<script>
+window.onerror=function(msg,src,line,col,err){
+  document.getElementById('loading').style.display='none';
+  var eb=document.getElementById('error-box');
+  eb.style.display='block';
+  eb.innerHTML='<h2 style="margin-bottom:12px;">오류 발생</h2><p>'+msg+'</p><p>줄 '+line+'</p><pre>'+(err?err.stack:'')+'</pre><p style="margin-top:20px;">페이지를 새로고침(F5)하세요.</p>';
+};
+</script>
+
+<script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone@7.23.4/babel.min.js"></script>
+
+<script>
+if(typeof React==='undefined'||typeof ReactDOM==='undefined'||typeof Babel==='undefined'){
+  document.getElementById('loading').style.display='none';
+  var eb=document.getElementById('error-box');
+  eb.style.display='block';
+  eb.innerHTML='<h2>라이브러리 로딩 실패</h2><p>인터넷 연결을 확인하세요. React/Babel CDN이 필요합니다.</p>';
+  throw new Error('CDN load failed');
+}
+</script>
+
+<script type="text/babel">
+try {
+var useState = React.useState;
+var useMemo = React.useMemo;
+
+
+
+/* ═══ CONSTANTS ═══ */
+var OT_TYPES = ["프로젝트","긴급대응","정기업무","고객대응","시스템점검","기타"];
+var ST = {DRAFT:"임시저장",SUBMITTED:"상신",APPROVED1:"1차승인",APPROVED:"최종승인",REJECTED:"반려"};
+var SC = {DRAFT:"#94a3b8",SUBMITTED:"#f59e0b",APPROVED1:"#3b82f6",APPROVED:"#10b981",REJECTED:"#ef4444"};
+var PC = ["#6366f1","#f43f5e","#0ea5e9","#f59e0b","#10b981","#8b5cf6"];
+var RL = {admin:"관리자",manager:"사업소장",worker:"담당자",approver:"결재자",viewer:"열람자"};
+var RC = {admin:"#6366f1",manager:"#10b981",worker:"#f59e0b",approver:"#3b82f6",viewer:"#94a3b8"};
+var moData = [{l:"10월",h:320,c:42,a:38,r:4},{l:"11월",h:385,c:51,a:44,r:7},{l:"12월",h:410,c:55,a:48,r:7},{l:"1월",h:365,c:48,a:42,r:6},{l:"2월",h:290,c:38,a:34,r:4},{l:"3월",h:198,c:26,a:22,r:4}];
+var apprs = [{id:"A001",nm:"송태준",role:"팀장"},{id:"A002",nm:"오현우",role:"부서장"},{id:"A003",nm:"임지수",role:"본부장"}];
+
+var EMP_RAW=[["이웅건","삼성동 본사","시설","M"],["정동진","삼성동 본사","시설","W"],["이진두","삼성동 본사","시설","V"],["권소정","삼성동 본사","시설","V"],["권오민","삼성동 본사","시설","V"],["양용진","삼성동 본사","시설","V"],["지원일","삼성동 본사","시설","V"],["임해원","삼성동 본사","시설","V"],["장진우","삼성동 본사","시설","V"],["신동민","삼성동 본사","시설","V"],["남상오","삼성동 본사","시설","V"],["장태수","삼성동 본사","시설","V"],["노윤형","삼성동 본사","기타","M"],["남궁철","삼성동 본사","기타","V"],["김재록","삼성동 본사","미화","W"],["최봉재","삼성동 본사","미화","W"],["장경수","삼성동 본사","미화","W"],["김송희","삼성동 본사","미화","V"],["성기숙","삼성동 본사","미화","V"],["박영숙","삼성동 본사","미화","V"],["김옥순","삼성동 본사","미화","V"],["방종현","삼성동 본사","미화","V"],["박영학","삼성동 본사","미화","V"],["강명자","삼성동 본사","미화","V"],["조증수","삼성동 본사","미화","V"],["이영자","삼성동 본사","미화","V"],["장혜숙","삼성동 본사","미화","V"],["김요진","삼성동 본사","미화","V"],["김종혁","삼성동 본사","미화","V"],["최영순","삼성동 본사","미화","V"],["김정선","삼성동 본사","미화","V"],["전정자","삼성동 본사","미화","V"],["박승경","삼성동 본사","보안","W"],["안성민","삼성동 본사","보안","M"],["황인수","삼성동 본사","보안","V"],["손세빈","삼성동 본사","보안","V"],["안태규","삼성동 본사","보안","V"],["조현빈","삼성동 본사","보안","V"],["박효문","삼성동 본사","보안","V"],["남우영","삼성동 본사","보안","V"],["이한영","삼성동 본사","보안","V"],["김승헌","삼성동 본사","보안","V"],["김경서","삼성동 본사","보안","V"],["이현아","삼성동 본사","보안","V"],["박종훈","삼성동 본사","보안","V"],["이미경","한남빌딩","미화","V"],["심인보","수원경기","미화","V"],["고천자","제주캠퍼스","미화","V"],["도정희","용인 연수원","미화","M"],["강유림","용인 연수원","미화","W"],["이경례","용인 연수원","미화","V"],["심미애","용인 연수원","미화","V"],["신윤자","용인 연수원","미화","V"],["박정희","용인 연수원","미화","V"],["정애경","용인 연수원","미화","V"],["김영해","용인 연수원","미화","V"],["조길환","용인 연수원","미화","V"],["홍영수","용인 연수원","미화","V"],["박태원","용인 연구소","미화","W"],["윤창숙","용인 연구소","미화","V"],["박경옥","용인 연구소","미화","V"],["정윤자","용인 연구소","미화","V"],["허경월","용인 연구소","미화","V"],["이재주","용인 연구소","미화","V"],["최영희","용인 연구소","미화","V"],["나송채","용인 연구소","보안","W"],["하욱남","용인 연구소","보안","V"],["김진만","용인 연구소","보안","V"],["김영신","용인 연구소","보안","V"],["이규택","용인 연수원","식음","W"],["이인규","용인 연수원","식음","V"],["이경숙","용인 연수원","식음","W"],["서혜숙","용인 연수원","식음","W"],["윤송자","용인 연수원","식음","V"],["김연옥","용인 연수원","식음","V"],["김은기","용인 연수원","식음","V"],["이주영","용인 연수원","식음","V"],["안영균","용인 연구소","시설","M"],["황춘석","용인 연구소","시설","M"],["김태한","용인 연구소","시설","M"],["백동수","용인 연구소","시설","W"],["최보순","용인 연구소","시설","V"],["김동연","용인 연구소","시설","W"],["황재욱","용인 연구소","시설","V"],["김윤식","용인 연구소","시설","V"],["김시현","용인 연구소","시설","V"],["곽진우","용인 연구소","시설","V"],["조성국","용인 연구소","시설","V"],["이종수","용인 연구소","시설","V"],["김재환","용인 연구소","시설","V"],["김도균","용인 연구소","시설","V"],["김찬수","용인 연구소","시설","V"],["현상하","유로프라자","시설","M"],["용해임","유로프라자","미화","W"],["김옥순","유로프라자","미화","V"],["유춘자","유로프라자","미화","V"],["정석조","유로프라자","미화","V"],["김희진","유로프라자","보안","V"],["윤정식","유로프라자","보안","W"],["김병근","유로프라자","보안","V"],["김인근","유로프라자","보안","V"],["한희순","유로프라자 사업장","미화","V"],["김계순","비워크","미화","V"],["전대규","하남 케어센터","시설","M"],["박은경","향남1공장","미화","W"],["조영희","향남1공장","미화","V"],["박명숙","향남1공장","미화","V"],["권명숙","향남1공장","미화","V"],["백영희","향남1공장","미화","V"],["박영자","향남1공장","미화","V"],["오영민","향남1공장","미화","V"],["유창순","향남1공장","미화","V"],["지영순","향남1공장","미화","V"],["김옥화","향남1공장","미화","V"],["안정숙","향남1공장","미화","V"],["박령서","바이오센터","미화","V"],["홍사용","향남1공장","미화","V"],["윤철수","향남1공장","미화","V"],["김봉구","향남1공장","미화","V"],["채종식","향남1공장","미화","V"],["서희영","바이오센터","미화","V"],["김신옥","바이오센터","미화","V"],["강선원","향남1공장","보안","W"],["송석곤","향남1공장","보안","V"],["박기홍","향남1공장","보안","V"],["황성환","향남1공장","보안","V"],["이우억","바이오센터","보안","V"],["양재일","원료센터","미화","V"],["신명숙","원료센터","미화","V"],["김창옥","원료센터","미화","V"],["김대원","원료센터","보안","W"],["이상근","원료센터","보안","V"],["김옥태","원료센터","보안","V"],["정정희","노보팩토리","미화","V"],["조순금","노보팩토리","미화","V"],["홍성분","노보팩토리","미화","V"],["김금순","에스캠퍼스","미화","V"],["김미영","세파센터","미화","W"],["조병철","세파센터","미화","V"],["정효순","세파센터","미화","V"],["박상연","세파센터","보안","V"],["이진용","세파센터","보안","V"],["김관영","오송공장","미화","M"],["오종덕","오송공장","미화","V"],["유부영","오송공장","미화","V"],["황미옥","오송공장","미화","V"],["김종숙","오송공장","미화","V"],["손영순","오송공장","미화","V"],["한영희","오송공장","미화","V"],["유옥진","오송공장","미화","V"],["곽호달","오송공장","보안","W"],["신광섭","오송공장","보안","V"],["김봉철","오송공장","보안","V"],["김진운","오송공장","보안","V"],["노현자","안성공장","미화","V"],["이영희","안성공장","미화","V"],["오대환","안성공장","보안","W"],["김정영","안성공장","보안","V"],["송용복","안성공장","보안","V"],["김덕승","성남공장","미화","V"],["안미선","성남공장","미화","V"],["정연국","성남공장","보안","W"],["조한정","성남공장","보안","V"],["김주형","성남공장","보안","V"],["김동운","대전사옥","시설","M"],["유수덕","대전사옥","미화","V"],["송순임","대전사옥","미화","V"],["이재성","대전사옥","보안","V"],["박대서","대전사옥","보안","V"],["김성만","경남사옥","시설","M"],["정선자","경남사옥","미화","V"],["김길영","경남사옥","미화","V"],["황천호","경남사옥","보안","V"],["이기만","경남사옥","보안","V"],["박영덕","의정부","시설","M"],["이성호","의정부","시설","W"],["전숙희","의정부","미화","W"],["황병옥","의정부","미화","V"],["김종섭","의정부","보안","V"],["윤각중","의정부","보안","V"],["김기태","성수점","시설","M"],["김태훈","성수점","보안","V"],["김윤호","성수점","보안","V"],["김은주","성수점","미화","V"],["박혜숙","성수점","미화","V"],["민대숙","대전공장","미화","W"],["이춘우","대전공장","미화","V"],["김용인","대전공장","보안","V"],["이병우","대전공장","보안","V"],["윤득현","힐리언스 선마을","시설","M"],["김진철","힐리언스 선마을","시설","W"],["최덕용","힐리언스 선마을","시설","W"],["박근모","힐리언스 선마을","시설","V"],["김태권","힐리언스 선마을","시설","V"],["박종훈","힐리언스 선마을","시설","V"],["이병국","힐리언스 선마을","시설","V"],["이병묵","힐리언스 선마을","시설","V"],["고혜림","힐리언스 선마을","식음","V"],["김주현","힐리언스 선마을","식음","V"],["박상선","힐리언스 선마을","식음","V"],["오애선","힐리언스 선마을","식음","V"],["강화영","힐리언스 선마을","식음","V"],["김미영","힐리언스 선마을","식음","V"],["이해녀","힐리언스 선마을","식음","V"],["박정희","힐리언스 선마을","식음","M"],["현윤정","힐리언스 선마을","식음","V"],["이정숙","힐리언스 선마을","식음","V"],["김민서","힐리언스 선마을","식음","V"],["이선광","힐리언스 선마을","식음","V"],["김호용","힐리언스 선마을","미화","W"],["강희옥","힐리언스 선마을","미화","V"],["함창희","힐리언스 선마을","미화","V"],["하창현","힐리언스 선마을","미화","W"],["심옥분","힐리언스 선마을","미화","V"],["이은숙","힐리언스 선마을","미화","V"],["김은배","힐리언스 선마을","미화","V"],["인치용","힐리언스 선마을","미화","V"]];
+
+var RMAP = {M:"manager",W:"worker",V:"viewer"};
+function buildEmps() {
+  var list = [], cnt = {};
+  EMP_RAW.forEach(function(e, i) {
+    var nm = e[0], site = e[1], area = e[2], rc = e[3];
+    var base = nm.replace(/\s/g, "");
+    if (cnt[base]) { cnt[base]++; base = base + cnt[base]; } else { cnt[base] = 1; }
+    list.push({id:"E" + String(i+1).padStart(3,"0"), nm:nm, site:site, dept:area + "팀", role:RMAP[rc] === "manager" ? "소장" : RMAP[rc] === "worker" ? "반장" : "사원", area:area, sysRole:RMAP[rc] || "viewer", email:base + "@daewoong.co.kr"});
+  });
+  return list;
+}
+
+var DEF_SITES = [
+  {id:"s01",corp:"대웅제약",name:"삼성동 본사",fac:15,clean:18,sec:14,food:0,note:"",status:"active"},
+  {id:"s02",corp:"대웅제약",name:"마곡연구소",fac:21,clean:20,sec:12,food:0,note:"하우스키핑2명 증원",status:"active"},
+  {id:"s03",corp:"대웅제약",name:"향남1공장",fac:0,clean:16,sec:4,food:0,note:"",status:"active"},
+  {id:"s04",corp:"대웅제약",name:"오송공장",fac:0,clean:8,sec:4,food:0,note:"",status:"active"},
+  {id:"s05",corp:"대웅제약",name:"한남빌딩",fac:0,clean:1,sec:0,food:0,note:"",status:"active"},
+  {id:"s06",corp:"대웅제약",name:"수원경기",fac:0,clean:1,sec:0,food:0,note:"",status:"active"},
+  {id:"s07",corp:"대웅제약",name:"제주캠퍼스",fac:0,clean:1,sec:0,food:0,note:"",status:"active"},
+  {id:"s08",corp:"대웅제약",name:"대전사옥",fac:1,clean:2,sec:2,food:0,note:"",status:"active"},
+  {id:"s09",corp:"대웅제약",name:"경남사옥",fac:1,clean:2,sec:2,food:0,note:"",status:"active"},
+  {id:"s10",corp:"대웅제약/경영개발원",name:"용인 연구소",fac:16,clean:18,sec:4,food:9,note:"",status:"active"},
+  {id:"s11",corp:"대웅제약/경영개발원",name:"용인 연수원",fac:0,clean:0,sec:0,food:0,note:"",status:"active"},
+  {id:"s12",corp:"대웅바이오",name:"안성공장",fac:0,clean:2,sec:3,food:0,note:"",status:"active"},
+  {id:"s13",corp:"대웅바이오",name:"원료센터",fac:0,clean:3,sec:3,food:0,note:"",status:"active"},
+  {id:"s14",corp:"대웅바이오",name:"세파센터",fac:0,clean:3,sec:2,food:0,note:"",status:"active"},
+  {id:"s15",corp:"대웅바이오",name:"바이오센터",fac:0,clean:2,sec:1,food:0,note:"",status:"active"},
+  {id:"s16",corp:"석천나눔센터",name:"유로프라자",fac:2,clean:3,sec:4,food:0,note:"",status:"active"},
+  {id:"s17",corp:"대웅개발",name:"유로프라자 사업장",fac:0,clean:0,sec:0,food:0,note:"",status:"active"},
+  {id:"s18",corp:"대웅개발",name:"비워크",fac:0,clean:1,sec:0,food:0,note:"",status:"active"},
+  {id:"s19",corp:"대웅개발",name:"하남 케어센터",fac:3,clean:4,sec:0,food:0,note:"",status:"active"},
+  {id:"s20",corp:"힐리언스",name:"힐리언스 선마을",fac:8,clean:8,sec:0,food:13,note:"",status:"active"},
+  {id:"s21",corp:"㈜대웅",name:"성남공장",fac:0,clean:2,sec:3,food:0,note:"",status:"active"},
+  {id:"s22",corp:"시지바이오",name:"에스캠퍼스",fac:0,clean:1,sec:0,food:0,note:"",status:"active"},
+  {id:"s23",corp:"시지바이오",name:"노보팩토리",fac:0,clean:3,sec:0,food:0,note:"",status:"active"},
+  {id:"s24",corp:"시지메드텍",name:"의정부",fac:2,clean:2,sec:2,food:0,note:"",status:"active"},
+  {id:"s25",corp:"시지메드텍",name:"성수점",fac:1,clean:2,sec:2,food:0,note:"",status:"active"},
+  {id:"s26",corp:"한올바이오파마",name:"대전공장",fac:0,clean:2,sec:2,food:0,note:"",status:"active"},
+];
+
+/* ═══ SEED OT DATA ═══ */
+function makeSeed(emps, siteNames) {
+  var out = [];
+  var rsn = ["마감 대응","긴급 이슈","서버 복구","고객 대응","정기 점검","마이그레이션","배포 준비","보안 패치"];
+  var ttl = ["분기마감 정산","시스템 긴급패치","고객사 후속작업","서버 이전","보고서 작성","코드리뷰 배포","DB 최적화","보안 점검"];
+  var sts = ["SUBMITTED","APPROVED1","APPROVED","REJECTED","APPROVED","APPROVED","SUBMITTED","APPROVED","APPROVED","DRAFT"];
+  for (var i = 0; i < 72; i++) {
+    var e = emps[i % emps.length], s = sts[i % sts.length], m = (i % 3) + 1, d = Math.min(28, Math.floor(Math.random() * 27) + 1);
+    var sh = 17 + Math.floor(Math.random() * 3), dur = 1 + Math.floor(Math.random() * 4);
+    out.push({
+      id:"OT-2026-" + String(i + 1).padStart(4, "0"), eId:e.id, eNm:e.nm, site:e.site, dept:e.dept, role:e.role,
+      title:ttl[i % ttl.length] + " OT", content:e.dept + " " + OT_TYPES[i % OT_TYPES.length] + " 업무 초과근무",
+      otType:OT_TYPES[i % OT_TYPES.length], reason:rsn[i % rsn.length],
+      date:"2026-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0"),
+      sTime:sh + ":00", eTime:Math.min(sh + dur, 24) + ":00", hrs:dur,
+      hol:Math.random() > 0.75, ngt:sh >= 22 || Math.random() > 0.8, status:s,
+      apr1:apprs[0].nm, apr2:apprs[1].nm,
+      ap2Op:s === "APPROVED" ? "승인합니다" : "",
+      rejR:s === "REJECTED" ? ["사유 불충분","시간 조정 필요","대체 인력 검토","재신청 바랍니다"][i % 4] : null,
+      subAt:s !== "DRAFT" ? "2026-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0") + " 16:30" : null,
+      apAt:s === "APPROVED" ? "2026-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0") + " 10:30" : null,
+    });
+  }
+  return out;
+}
+
+/* ═══ STYLES (original) ═══ */
+var card = {background:"#fff",borderRadius:14,boxShadow:"0 1px 3px rgba(0,0,0,0.05)",padding:24,marginBottom:20};
+var thS = {padding:"10px 13px",textAlign:"left",fontWeight:600,color:"#64748b",fontSize:10.5,textTransform:"uppercase",borderBottom:"2px solid #e5e7eb",background:"#fafbfc"};
+var tdS = {padding:"11px 13px",borderBottom:"1px solid #f1f5f9",color:"#334155"};
+var inpS = {width:"100%",padding:"9px 13px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"};
+var lblS = {display:"block",fontSize:11.5,fontWeight:600,color:"#475569",marginBottom:5};
+var bPri = {padding:"9px 18px",borderRadius:8,border:"none",cursor:"pointer",fontWeight:600,fontSize:13,background:"#6366f1",color:"#fff"};
+var bDef = {padding:"9px 18px",borderRadius:8,border:"none",cursor:"pointer",fontWeight:600,fontSize:13,background:"#f1f5f9",color:"#475569"};
+var bSuc = {padding:"9px 18px",borderRadius:8,border:"1px solid #bbf7d0",cursor:"pointer",fontWeight:600,fontSize:13,background:"#f0fdf4",color:"#10b981"};
+var bDan = {padding:"9px 18px",borderRadius:8,border:"1px solid #fecaca",cursor:"pointer",fontWeight:600,fontSize:13,background:"#fef2f2",color:"#ef4444"};
+var bSm = {padding:"5px 10px",borderRadius:6,border:"1px solid #e2e8f0",cursor:"pointer",fontWeight:500,fontSize:11,background:"#fff",color:"#475569"};
+
+/* ═══ SMALL COMPONENTS (original) ═══ */
+function Bdg(p) { return <span style={{display:"inline-block",padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:SC[p.s]+"18",color:SC[p.s]}}>{ST[p.s]}</span>; }
+function Tag(p) { return <span style={{padding:"2px 8px",borderRadius:5,fontSize:11,background:"#f1f5f9",color:"#475569"}}>{p.children}</span>; }
+function Kpi(p) { var pos = p.ch >= 0; return <div style={{background:"#fff",borderRadius:14,padding:"18px 20px",boxShadow:"0 1px 3px rgba(0,0,0,0.05)",borderLeft:"4px solid " + p.ac}}><div style={{fontSize:11.5,color:"#64748b",marginBottom:4}}>{p.lb}</div><div style={{fontSize:26,fontWeight:800,color:"#0f172a",lineHeight:1.1}}>{p.vl}<span style={{fontSize:13,fontWeight:400,color:"#94a3b8",marginLeft:2}}>{p.un}</span></div>{p.ch != null && <div style={{fontSize:11,fontWeight:600,color:pos ? "#10b981" : "#ef4444",marginTop:5}}>{pos ? "+" : ""}{p.ch}%</div>}</div>; }
+
+/* ═══ CSS CHART COMPONENTS (original) ═══ */
+function CSSBar(p) {
+  var data = p.data, maxV = Math.max.apply(null, data.map(function(d) { return d.v; })) || 1;
+  return (<div style={{display:"flex",alignItems:"flex-end",gap:6,height:160,padding:"0 4px"}}>
+    {data.map(function(d, i) {
+      var pct = Math.round((d.v / maxV) * 100);
+      return (<div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+        <div style={{fontSize:10,fontWeight:700,color:"#475569"}}>{d.v}</div>
+        <div style={{width:"100%",height:pct + "%",minHeight:4,background:d.cl || "#6366f1",borderRadius:"4px 4px 0 0",transition:"height 0.3s"}} />
+        <div style={{fontSize:10,color:"#94a3b8",whiteSpace:"nowrap"}}>{d.l}</div>
+      </div>);
+    })}
+  </div>);
+}
+function CSSHBar(p) {
+  var data = p.data, maxV = Math.max.apply(null, data.map(function(d) { return d.v; })) || 1;
+  return (<div style={{display:"flex",flexDirection:"column",gap:6}}>
+    {data.map(function(d, i) {
+      var pct = Math.round((d.v / maxV) * 100);
+      return (<div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{width:48,fontSize:12,textAlign:"right",color:"#475569",flexShrink:0}}>{d.l}</div>
+        <div style={{flex:1,height:18,background:"#f1f5f9",borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",width:pct + "%",background:d.v > 20 ? "#ef4444" : d.cl || "#6366f1",borderRadius:4,transition:"width 0.3s"}} /></div>
+        <div style={{width:32,fontSize:12,fontWeight:700,color:d.v > 20 ? "#ef4444" : "#475569"}}>{d.v}h</div>
+      </div>);
+    })}
+  </div>);
+}
+function CSSPie(p) {
+  var data = p.data, total = data.reduce(function(a, d) { return a + d.v; }, 0) || 1;
+  var segs = [], cum = 0;
+  data.forEach(function(d, i) { var pv = (d.v / total) * 100; segs.push(PC[i % PC.length] + " " + cum + "% " + (cum + pv) + "%"); cum += pv; });
+  return (<div style={{display:"flex",alignItems:"center",gap:20}}>
+    <div style={{width:120,height:120,borderRadius:"50%",background:"conic-gradient(" + segs.join(",") + ")",flexShrink:0}} />
+    <div style={{display:"flex",flexDirection:"column",gap:4}}>
+      {data.map(function(d, i) { return <div key={i} style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}><div style={{width:10,height:10,borderRadius:2,background:PC[i % PC.length],flexShrink:0}} /><span style={{color:"#64748b"}}>{d.l}</span><span style={{fontWeight:600}}>{d.v}건</span></div>; })}
+    </div>
+  </div>);
+}
+
+/* ═══ AUTH SCREEN ═══ */
+function AuthScreen(props) {
+  var _t = useState("login"), tab = _t[0], setTab = _t[1];
+  var _e = useState(""), err = _e[0], setErr = _e[1];
+  var _o = useState(""), ok = _o[0], setOk = _o[1];
+  var _le = useState(""), le = _le[0], setLe = _le[1];
+  var _lp = useState(""), lp = _lp[0], setLp = _lp[1];
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"linear-gradient(180deg,#0c1222,#1a2744)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,overflow:"auto"}}>
+      <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:440,padding:36,boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+        <div style={{textAlign:"center",marginBottom:28}}><div style={{fontSize:22,fontWeight:800}}>대웅그룹</div><div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>OT 운영관리 플랫폼</div></div>
+        <div style={{marginBottom:14}}><label style={lblS}>아이디 (이메일)</label><input style={inpS} placeholder="admin@daewoong.co.kr" value={le} onChange={function(e) { setLe(e.target.value); }} /></div>
+        <div style={{marginBottom:14}}><label style={lblS}>비밀번호</label><input type="password" style={inpS} value={lp} onChange={function(e) { setLp(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") { setErr(""); var r = props.onLogin(le.trim().toLowerCase(), lp); if (typeof r === "string") setErr(r); } }} /></div>
+        <button style={Object.assign({}, bPri, {width:"100%",padding:12})} onClick={function() { setErr(""); var r = props.onLogin(le.trim().toLowerCase(), lp); if (typeof r === "string") setErr(r); }}>로그인</button>
+        {err && <div style={{textAlign:"center",fontSize:11,color:"#ef4444",marginTop:10}}>{err}</div>}
+        <div style={{marginTop:18,padding:12,background:"#f8fafc",borderRadius:10,fontSize:11,color:"#64748b",lineHeight:1.7}}>
+          <b>관리자 (결재·설정관리)</b><br />admin@daewoong.co.kr / admin1234<br /><br />
+          <b>사업소장 (결재+OT신청)</b><br />이웅건@daewoong.co.kr / user1234<br /><br />
+          <b>담당자·열람자 (OT신청)</b><br />정동진@daewoong.co.kr / user1234
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ SITE SELECT ═══ */
+function SiteSelScreen(props) {
+  var _fc = useState(""), fc = _fc[0], setFc = _fc[1];
+  var user = props.user, sites = props.sites;
+  var us = user.isAdmin ? sites : sites.filter(function(s) { return user.sites.indexOf(s.name) >= 0; });
+  var corps = []; us.forEach(function(s) { if (corps.indexOf(s.corp) < 0) corps.push(s.corp); }); corps.sort();
+  var fl = fc ? us.filter(function(s) { return s.corp === fc; }) : us;
+  return (
+    <div style={{position:"fixed",inset:0,background:"linear-gradient(180deg,#0c1222,#1a2744)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,overflow:"auto"}}>
+      <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:580,padding:32,boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+        <div style={{textAlign:"center",fontSize:17,fontWeight:700,marginBottom:6}}>사업소 선택</div>
+        <div style={{textAlign:"center",fontSize:11,color:"#64748b",marginBottom:16}}>{user.name} · {user.isAdmin ? "관리자" : "사용자"} · 접근 가능 {us.length}곳</div>
+        <select style={Object.assign({}, inpS, {width:"auto",background:"#fff",marginBottom:14})} value={fc} onChange={function(e) { setFc(e.target.value); }}><option value="">전체 법인</option>{corps.map(function(c) { return <option key={c}>{c}</option>; })}</select>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10,maxHeight:380,overflowY:"auto",marginBottom:16}}>
+          {us.length > 1 && <div style={{border:"2px dashed #d1d5db",borderRadius:12,padding:14,cursor:"pointer",textAlign:"center"}} onClick={function() { props.onSelect("__all__"); }}><span style={{fontSize:20}}>🏢</span><div style={{fontSize:13,fontWeight:600,marginTop:4}}>전체 사업소</div></div>}
+          {fl.map(function(s) { var t = (s.fac || 0) + (s.clean || 0) + (s.sec || 0) + (s.food || 0); return <div key={s.id} style={{border:"1.5px solid #e2e8f0",borderRadius:12,padding:14,cursor:"pointer"}} onClick={function() { props.onSelect(s.name); }}><div style={{fontSize:10,color:"#6366f1",fontWeight:500}}>{s.corp}</div><div style={{fontSize:13,fontWeight:600,marginTop:2}}>{s.name}</div><div style={{fontSize:10,color:"#94a3b8",marginTop:4}}>인원 {t}명</div></div>; })}
+        </div>
+        <div style={{textAlign:"right"}}><button style={Object.assign({}, bSm, {color:"#ef4444"})} onClick={props.onLogout}>로그아웃</button></div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ OT FORM (original) ═══ */
+function OTForm(props) {
+  var me = props.me;
+  var _f = useState({title:"",content:"",otType:OT_TYPES[0],reason:"",date:"2026-03-24",startTime:"18:00",endTime:"21:00",isH:false,isN:false,a1:apprs[0].nm,a2:apprs[1].nm});
+  var f = _f[0], setF = _f[1];
+  var hrs = useMemo(function() { return Math.max(0, (parseInt(f.endTime) || 0) - (parseInt(f.startTime) || 0)); }, [f.startTime, f.endTime]);
+  function u(k, v) { setF(function(p) { var n = {}; for (var x in p) n[x] = p[x]; n[k] = v; return n; }); }
+  var ok = f.title && f.reason && hrs > 0;
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={props.onClose}>
+      <div style={{background:"#fff",borderRadius:18,width:660,maxHeight:"88vh",overflow:"auto"}} onClick={function(e) { e.stopPropagation(); }}>
+        <div style={{padding:"22px 26px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:"#fff",zIndex:2,borderRadius:"18px 18px 0 0"}}>
+          <div><h2 style={{fontSize:18,fontWeight:800}}>OT 신청서 작성</h2><p style={{fontSize:12,color:"#94a3b8",marginTop:4}}>결재 후 자동 집계</p></div>
+          <button onClick={props.onClose} style={{background:"#f1f5f9",border:"none",cursor:"pointer",padding:"6px 10px",borderRadius:8,fontSize:16}}>✕</button>
+        </div>
+        <div style={{padding:"18px 26px 26px"}}>
+          <div style={{background:"#f8fafc",borderRadius:10,padding:"12px 16px",marginBottom:18,display:"flex",gap:18,fontSize:12.5,flexWrap:"wrap"}}>
+            <div><span style={{color:"#94a3b8"}}>신청자</span> <b>{me.nm}</b></div><div><span style={{color:"#94a3b8"}}>사번</span> {me.id}</div><div><span style={{color:"#94a3b8"}}>사업소</span> {me.site}</div><div><span style={{color:"#94a3b8"}}>부서</span> {me.dept}</div>
+          </div>
+          <div style={{marginBottom:12}}><label style={lblS}>OT 제목 *</label><input style={inpS} placeholder="OT 제목" value={f.title} onChange={function(e) { u("title", e.target.value); }} /></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}><div><label style={lblS}>유형</label><select style={Object.assign({}, inpS, {background:"#fff"})} value={f.otType} onChange={function(e) { u("otType", e.target.value); }}>{OT_TYPES.map(function(t) { return <option key={t}>{t}</option>; })}</select></div><div><label style={lblS}>수행일 *</label><input type="date" style={inpS} value={f.date} onChange={function(e) { u("date", e.target.value); }} /></div></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}><div><label style={lblS}>시작 *</label><input type="time" style={inpS} value={f.startTime} onChange={function(e) { u("startTime", e.target.value); }} /></div><div><label style={lblS}>종료 *</label><input type="time" style={inpS} value={f.endTime} onChange={function(e) { u("endTime", e.target.value); }} /></div></div>
+          <div style={{background:hrs > 0 ? "#eef2ff" : "#fef2f2",borderRadius:10,padding:"10px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:12}}>
+            <div><div style={{fontSize:11,fontWeight:600,color:hrs > 0 ? "#6366f1" : "#ef4444"}}>총 OT</div><div style={{fontSize:24,fontWeight:800,color:hrs > 0 ? "#6366f1" : "#ef4444"}}>{hrs}<span style={{fontSize:13}}>시간</span></div></div>
+            <div style={{marginLeft:"auto",display:"flex",gap:12}}><label style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><input type="checkbox" checked={f.isH} onChange={function(e) { u("isH", e.target.checked); }} /> 휴일</label><label style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><input type="checkbox" checked={f.isN} onChange={function(e) { u("isN", e.target.checked); }} /> 야간</label></div>
+          </div>
+          <div style={{marginBottom:12}}><label style={lblS}>사유 *</label><input style={inpS} placeholder="OT 사유" value={f.reason} onChange={function(e) { u("reason", e.target.value); }} /></div>
+          <div style={{marginBottom:12}}><label style={lblS}>상세 내용</label><textarea style={Object.assign({}, inpS, {minHeight:60,resize:"vertical"})} placeholder="업무 상세" value={f.content} onChange={function(e) { u("content", e.target.value); }} /></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}><div><label style={lblS}>1차 결재자</label><select style={Object.assign({}, inpS, {background:"#fff"})} value={f.a1} onChange={function(e) { u("a1", e.target.value); }}>{apprs.map(function(a) { return <option key={a.id} value={a.nm}>{a.nm} ({a.role})</option>; })}</select></div><div><label style={lblS}>최종 결재자</label><select style={Object.assign({}, inpS, {background:"#fff"})} value={f.a2} onChange={function(e) { u("a2", e.target.value); }}>{apprs.map(function(a) { return <option key={a.id} value={a.nm}>{a.nm} ({a.role})</option>; })}</select></div></div>
+          <div style={{border:"2px dashed #d1d5db",borderRadius:10,padding:16,textAlign:"center",color:"#94a3b8",fontSize:12}}>📎 파일 드래그 또는 클릭</div>
+          {hrs >= 4 && <div style={{background:"#fffbeb",border:"1px solid #fef3c7",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#92400e",marginTop:10}}>⚠ 4h이상 — 첨부 필수</div>}
+          {f.isH && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#991b1b",marginTop:10}}>⚠ 휴일OT — 증빙 필수</div>}
+        </div>
+        <div style={{padding:"14px 26px 22px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8,position:"sticky",bottom:0,background:"#fff",borderRadius:"0 0 18px 18px"}}>
+          <button style={bDef} onClick={props.onClose}>취소</button>
+          <button style={bDef} onClick={function() { props.onSubmit(Object.assign({}, f, {hrs:hrs}), "DRAFT"); props.onClose(); }}>임시저장</button>
+          <button style={Object.assign({}, bPri, {opacity:ok ? 1 : 0.5})} onClick={function() { if (ok) { props.onSubmit(Object.assign({}, f, {hrs:hrs}), "SUBMITTED"); props.onClose(); } }}>상신</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ DETAIL (original) ═══ */
+function Detail(props) {
+  var r = props.req, canApprove = props.canApprove;
+  var _op = useState(""), op = _op[0], setOp = _op[1];
+  var _rr = useState(""), rr = _rr[0], setRr = _rr[1];
+  var _md = useState(null), md = _md[0], setMd = _md[1];
+  if (!r) return null;
+  var canA = canApprove && (r.status === "SUBMITTED" || r.status === "APPROVED1");
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={props.onClose}>
+      <div style={{background:"#fff",borderRadius:18,width:580,maxHeight:"85vh",overflow:"auto"}} onClick={function(e) { e.stopPropagation(); }}>
+        <div style={{padding:"22px 26px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between"}}>
+          <div><div style={{marginBottom:4}}><span style={{fontSize:12,fontWeight:700,color:"#6366f1",marginRight:10}}>{r.id}</span><Bdg s={r.status} /></div><h2 style={{fontSize:17,fontWeight:800}}>{r.title}</h2></div>
+          <button onClick={props.onClose} style={{background:"#f1f5f9",border:"none",cursor:"pointer",padding:"6px 10px",borderRadius:8,fontSize:16,alignSelf:"flex-start"}}>✕</button>
+        </div>
+        <div style={{padding:"18px 26px 22px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 20px",fontSize:13,marginBottom:18}}>
+            {[["신청자", r.eNm + " (" + r.role + ")"],["소속", r.site + "·" + r.dept],["유형", r.otType],["사유", r.reason],["수행일", r.date],["시간", r.sTime + "~" + r.eTime + " (" + r.hrs + "h)"],["휴일/야간", (r.hol ? "휴일 " : "") + (r.ngt ? "야간" : "") + ((!r.hol && !r.ngt) ? "해당없음" : "")],["결재", r.apr1 + "→" + r.apr2]].map(function(x, i) { return <div key={i}><div style={{fontSize:11,color:"#94a3b8",marginBottom:1}}>{x[0]}</div><div style={{fontWeight:500}}>{x[1]}</div></div>; })}
+          </div>
+          {r.content && <div style={{background:"#f8fafc",borderRadius:10,padding:12,fontSize:13,color:"#475569",marginBottom:16,lineHeight:1.6}}>{r.content}</div>}
+          {r.status === "APPROVED" && r.ap2Op && <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10}}>✅ {r.apr2}: {r.ap2Op}</div>}
+          {r.status === "REJECTED" && r.rejR && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10}}>❌ 반려: {r.rejR}</div>}
+          {canA && <div>
+            <div style={{borderTop:"1px solid #f1f5f9",margin:"14px 0"}} />
+            {md === null && <div style={{display:"flex",gap:8}}><button style={Object.assign({}, bSuc, {flex:1})} onClick={function() { setMd("ap"); }}>승인</button><button style={Object.assign({}, bDef, {flex:1})}>보류</button><button style={Object.assign({}, bDan, {flex:1})} onClick={function() { setMd("rj"); }}>반려</button></div>}
+            {md === "rj" && <div><label style={lblS}>반려 사유 *</label><textarea style={Object.assign({}, inpS, {minHeight:60,resize:"vertical"})} value={rr} onChange={function(e) { setRr(e.target.value); }} /><div style={{display:"flex",gap:8,marginTop:8}}><button style={bDef} onClick={function() { setMd(null); }}>취소</button><button style={Object.assign({}, bDan, {opacity:rr ? 1 : 0.5})} onClick={function() { if (rr) { props.onAct(r.id, "REJECTED", rr); props.onClose(); } }}>반려 확정</button></div></div>}
+            {md === "ap" && <div><label style={lblS}>결재 의견</label><textarea style={Object.assign({}, inpS, {minHeight:60,resize:"vertical"})} value={op} onChange={function(e) { setOp(e.target.value); }} /><div style={{display:"flex",gap:8,marginTop:8}}><button style={bDef} onClick={function() { setMd(null); }}>취소</button><button style={Object.assign({}, bPri, {background:"#10b981"})} onClick={function() { props.onAct(r.id, "APPROVED", op); props.onClose(); }}>승인 확정</button></div></div>}
+          </div>}
+          {!canApprove && (r.status === "SUBMITTED" || r.status === "APPROVED1") && <div style={{background:"#fffbeb",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#92400e",marginTop:10}}>⏳ 결재 대기중입니다. 관리자/사업소장 승인을 기다려 주세요.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ PAGES (original — DashPage, ListPage, AnalPage, ReportPage, SettPage) ═══ */
+function DashPage(props) {
+  var d = props.data, emps = props.emps, siteNames = props.siteNames;
+  var _period = useState("month"), period = _period[0], setPeriod = _period[1];
+
+  /* ── 날짜 유틸 ── */
+  var today = new Date(2026, 2, 24); /* 2026-03-24 */
+  var todayStr = "2026-03-24";
+
+  function getWeekRange(dt) {
+    var d2 = new Date(dt); var day = d2.getDay() || 7;
+    var mon = new Date(d2); mon.setDate(mon.getDate() - day + 1);
+    var sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+    return {start:fmtD(mon), end:fmtD(sun)};
+  }
+  function fmtD(dt) { return dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0"); }
+  function getMonthRange(dt) { var y = dt.getFullYear(), m = dt.getMonth(); var last = new Date(y, m + 1, 0).getDate(); return {start:y + "-" + String(m + 1).padStart(2, "0") + "-01", end:y + "-" + String(m + 1).padStart(2, "0") + "-" + String(last).padStart(2, "0")}; }
+  function getYearRange(dt) { var y = dt.getFullYear(); return {start:y + "-01-01", end:y + "-12-31"}; }
+
+  /* ── 기간별 데이터 필터 ── */
+  var range = useMemo(function() {
+    if (period === "day") return {start:todayStr, end:todayStr};
+    if (period === "week") return getWeekRange(today);
+    if (period === "month") return getMonthRange(today);
+    return getYearRange(today);
+  }, [period]);
+
+  var fd = useMemo(function() { return d.filter(function(r) { return r.date >= range.start && r.date <= range.end; }); }, [d, range]);
+  var ap = fd.filter(function(r) { return r.status === "APPROVED"; });
+  var totH = ap.reduce(function(a, r) { return a + r.hrs; }, 0);
+  var pend = fd.filter(function(r) { return r.status === "SUBMITTED" || r.status === "APPROVED1"; }).length;
+  var rejected = fd.filter(function(r) { return r.status === "REJECTED"; }).length;
+
+  /* ── 기간 라벨 ── */
+  var periodLabel = period === "day" ? todayStr : period === "week" ? range.start + " ~ " + range.end : period === "month" ? "2026년 3월" : "2026년";
+
+  /* ── OT 추이 차트 데이터 (기간별 변경) ── */
+  var trendData = useMemo(function() {
+    if (period === "day" || period === "week") {
+      /* 이번 주 월~일 */
+      var wr = getWeekRange(today);
+      var labels = ["월","화","수","목","금","토","일"];
+      var dt = new Date(wr.start.substring(0,4), parseInt(wr.start.substring(5,7)) - 1, parseInt(wr.start.substring(8,10)));
+      return labels.map(function(lb, i) {
+        var ds = fmtD(dt);
+        var h = d.filter(function(r) { return r.date === ds && r.status === "APPROVED"; }).reduce(function(a, r) { return a + r.hrs; }, 0);
+        dt.setDate(dt.getDate() + 1);
+        return {l:lb, v:h};
+      });
+    }
+    if (period === "month") {
+      /* 3월 1일~31일, 5일 단위 */
+      var mr = getMonthRange(today);
+      var result = [];
+      var lastDay = parseInt(mr.end.substring(8, 10));
+      for (var day2 = 1; day2 <= lastDay; day2 += 3) {
+        var endD = Math.min(day2 + 2, lastDay);
+        var lbl = day2 + "~" + endD + "일";
+        var h2 = 0;
+        for (var dd = day2; dd <= endD; dd++) {
+          var ds2 = "2026-03-" + String(dd).padStart(2, "0");
+          h2 += d.filter(function(r) { return r.date === ds2 && r.status === "APPROVED"; }).reduce(function(a, r) { return a + r.hrs; }, 0);
+        }
+        result.push({l:lbl, v:h2});
+      }
+      return result;
+    }
+    /* 년: 월별 */
+    return ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"].map(function(lb, i) {
+      var prefix = "2026-" + String(i + 1).padStart(2, "0");
+      var h3 = d.filter(function(r) { return r.date.substring(0, 7) === prefix && r.status === "APPROVED"; }).reduce(function(a, r) { return a + r.hrs; }, 0);
+      return {l:lb, v:h3};
+    });
+  }, [d, period]);
+
+  var trendTitle = period === "day" || period === "week" ? "📈 이번 주 OT 추이 (일별)" : period === "month" ? "📈 이번 달 OT 추이 (3일 단위)" : "📈 연간 OT 추이 (월별)";
+
+  /* ── 승인/반려 차트 (기간별) ── */
+  var approvalData = useMemo(function() {
+    if (period === "day" || period === "week") {
+      var wr2 = getWeekRange(today);
+      var labels2 = ["월","화","수","목","금","토","일"];
+      var dt2 = new Date(wr2.start.substring(0,4), parseInt(wr2.start.substring(5,7)) - 1, parseInt(wr2.start.substring(8,10)));
+      return {
+        approved: labels2.map(function(lb, i) { var ds = fmtD(dt2); var c = d.filter(function(r) { return r.date === ds && r.status === "APPROVED"; }).length; dt2.setDate(dt2.getDate() + 1); return {l:lb, v:c, cl:"#10b981"}; }),
+        rejected: (function() { var dt3 = new Date(wr2.start.substring(0,4), parseInt(wr2.start.substring(5,7)) - 1, parseInt(wr2.start.substring(8,10))); return labels2.map(function(lb) { var ds = fmtD(dt3); var c = d.filter(function(r) { return r.date === ds && r.status === "REJECTED"; }).length; dt3.setDate(dt3.getDate() + 1); return {l:lb, v:c, cl:"#ef4444"}; }); })()
+      };
+    }
+    if (period === "month") {
+      var weeks = []; var mr2 = getMonthRange(today); var lastD = parseInt(mr2.end.substring(8, 10));
+      for (var w = 1; w <= lastD; w += 7) {
+        var we = Math.min(w + 6, lastD);
+        var apC = 0, rjC = 0;
+        for (var dd2 = w; dd2 <= we; dd2++) { var ds3 = "2026-03-" + String(dd2).padStart(2, "0"); apC += d.filter(function(r) { return r.date === ds3 && r.status === "APPROVED"; }).length; rjC += d.filter(function(r) { return r.date === ds3 && r.status === "REJECTED"; }).length; }
+        weeks.push({l:w + "~" + we + "일", ap:apC, rj:rjC});
+      }
+      return {approved:weeks.map(function(w2) { return {l:w2.l, v:w2.ap, cl:"#10b981"}; }), rejected:weeks.map(function(w2) { return {l:w2.l, v:w2.rj, cl:"#ef4444"}; })};
+    }
+    /* 년: 월별 */
+    var months = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
+    return {
+      approved:months.map(function(lb, i) { var pf = "2026-" + String(i + 1).padStart(2, "0"); return {l:lb, v:d.filter(function(r) { return r.date.substring(0, 7) === pf && r.status === "APPROVED"; }).length, cl:"#10b981"}; }),
+      rejected:months.map(function(lb, i) { var pf = "2026-" + String(i + 1).padStart(2, "0"); return {l:lb, v:d.filter(function(r) { return r.date.substring(0, 7) === pf && r.status === "REJECTED"; }).length, cl:"#ef4444"}; })
+    };
+  }, [d, period]);
+
+  var arTitle = period === "day" || period === "week" ? "📊 이번 주 승인/반려 (일별)" : period === "month" ? "📊 이번 달 승인/반려 (주별)" : "📊 연간 승인/반려 (월별)";
+
+  /* ── 사업소별 OT (전체) ── */
+  var siteD = siteNames.map(function(si) { var x = ap.filter(function(r) { return r.site === si; }); return {l:si, v:x.reduce(function(a, r) { return a + r.hrs; }, 0)}; });
+
+  /* ── 기타 ── */
+  var empD = emps.map(function(e) { return {l:e.nm, v:ap.filter(function(r) { return r.eId === e.id; }).reduce(function(a, r) { return a + r.hrs; }, 0)}; }).sort(function(a, b) { return b.v - a.v; }).slice(0, 8);
+  var typeD = OT_TYPES.map(function(t) { return {l:t, v:ap.filter(function(r) { return r.otType === t; }).length}; });
+
+  /* ── 필터 버튼 스타일 ── */
+  var fBtn = function(p) { return {padding:"7px 16px",borderRadius:8,border:"none",cursor:"pointer",fontWeight:period === p ? 700 : 500,fontSize:12,background:period === p ? "#6366f1" : "#f1f5f9",color:period === p ? "#fff" : "#64748b",transition:"all 0.15s"}; };
+
+  return (<div>
+    {/* ── 기간 필터 ── */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18,flexWrap:"wrap",gap:10}}>
+      <div style={{display:"flex",gap:6}}>
+        <button style={fBtn("day")} onClick={function() { setPeriod("day"); }}>일</button>
+        <button style={fBtn("week")} onClick={function() { setPeriod("week"); }}>주</button>
+        <button style={fBtn("month")} onClick={function() { setPeriod("month"); }}>월</button>
+        <button style={fBtn("year")} onClick={function() { setPeriod("year"); }}>년</button>
+      </div>
+      <div style={{fontSize:13,color:"#64748b"}}><span style={{fontWeight:600,color:"#0f172a"}}>{periodLabel}</span> 기준 조회</div>
+    </div>
+
+    {/* ── KPI ── */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20}}>
+      <Kpi lb="총 OT 시간" vl={totH} un="h" ac="#6366f1" />
+      <Kpi lb="총 신청" vl={fd.length} un="건" ac="#0ea5e9" />
+      <Kpi lb="승인율" vl={fd.length > 0 ? ((ap.length / fd.length) * 100).toFixed(1) : "0"} un="%" ac="#10b981" />
+      <Kpi lb="결재 대기" vl={pend} un="건" ac="#f59e0b" />
+    </div>
+
+    {/* ── OT 추이 (기간별) ── */}
+    <div style={card}><div style={{fontSize:14,fontWeight:700,marginBottom:14}}>{trendTitle}</div><CSSBar data={trendData} /></div>
+
+    {/* ── 사업소별 OT (전체 — 세로 배치) ── */}
+    <div style={card}>
+      <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>🏢 사업소별 OT ({siteNames.length}곳)</div>
+      <CSSHBar data={siteD} />
+    </div>
+
+    {/* ── 승인/반려 (기간별) ── */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+      <div style={card}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>{arTitle}</div>
+        <div style={{marginBottom:8}}><div style={{display:"flex",gap:10,marginBottom:8}}><span style={{fontSize:10,display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:2,background:"#10b981"}} />승인</span><span style={{fontSize:10,display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:2,background:"#ef4444"}} />반려</span></div></div>
+        <CSSBar data={approvalData.approved} />
+        <div style={{marginTop:10}}><CSSBar data={approvalData.rejected} /></div>
+      </div>
+      <div style={card}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>⚠️ 알림</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>{props.noti.slice(0, 5).map(function(n, i) { return <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:n.cl + "08",border:"1px solid " + n.cl + "25",borderRadius:8,fontSize:12.5}}><span style={{padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,background:n.cl + "18",color:n.cl}}>{n.lv}</span><span style={{flex:1}}>{n.msg}</span><span style={{fontSize:10,color:"#94a3b8"}}>{n.tm}</span></div>; })}</div>
+      </div>
+    </div>
+
+    {/* ── 유형 분포 / 개인별 ── */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+      <div style={card}><div style={{fontSize:14,fontWeight:700,marginBottom:14}}>🔄 유형 분포</div><CSSPie data={typeD} /></div>
+      <div style={card}><div style={{fontSize:14,fontWeight:700,marginBottom:14}}>👤 개인별 상위</div><CSSHBar data={empD} /></div>
+    </div>
+
+    {/* ── 최근 신청 ── */}
+    <div style={card}><div style={{fontSize:14,fontWeight:700,marginBottom:14}}>🕐 최근 신청</div><div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:13}}><thead><tr>{["번호","신청자","사업소","제목","유형","수행일","시간","상태"].map(function(h) { return <th key={h} style={thS}>{h}</th>; })}</tr></thead><tbody>{fd.slice(0, 10).map(function(r) { return <tr key={r.id} style={{cursor:"pointer"}} onClick={function() { props.onDet(r); }}><td style={Object.assign({}, tdS, {fontWeight:600,color:"#6366f1",fontSize:12})}>{r.id}</td><td style={tdS}>{r.eNm}</td><td style={Object.assign({}, tdS, {fontSize:12})}>{r.site}</td><td style={tdS}>{r.title}</td><td style={tdS}><Tag>{r.otType}</Tag></td><td style={Object.assign({}, tdS, {fontSize:12,color:"#64748b"})}>{r.date}</td><td style={Object.assign({}, tdS, {fontWeight:700})}>{r.hrs}h</td><td style={tdS}><Bdg s={r.status} /></td></tr>; })}</tbody></table></div></div>
+  </div>);
+}
+
+function ListPage(props) {
+  var _t = useState("ALL"), tab = _t[0], setTab = _t[1];
+  var base = props.mine ? props.data.filter(function(r) { return r.eId === props.meId; }) : props.data;
+  var list = base.filter(function(r) { return tab === "ALL" || r.status === tab; });
+  var tabs = ["ALL","SUBMITTED","APPROVED","REJECTED","DRAFT"];
+  return (<div style={card}>
+    <div style={{display:"flex",borderBottom:"2px solid #e5e7eb",marginBottom:16}}>{tabs.map(function(t) { var cn = t === "ALL" ? base.length : base.filter(function(r) { return r.status === t; }).length; return <button key={t} style={{padding:"10px 14px",cursor:"pointer",fontWeight:tab === t ? 700 : 500,fontSize:12,color:tab === t ? "#6366f1" : "#94a3b8",background:"transparent",border:"none",borderBottom:tab === t ? "2px solid #6366f1" : "2px solid transparent",marginBottom:-2}} onClick={function() { setTab(t); }}>{t === "ALL" ? "전체" : ST[t]} ({cn})</button>; })}</div>
+    <table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:13}}><thead><tr>{["번호","신청자","사업소","제목","유형","수행일","시간","상태"].map(function(h) { return <th key={h} style={thS}>{h}</th>; })}</tr></thead><tbody>
+      {list.length === 0 && <tr><td colSpan={8} style={{textAlign:"center",padding:40,color:"#94a3b8"}}>해당 내역 없음</td></tr>}
+      {list.slice(0, 20).map(function(r) { return <tr key={r.id} style={{cursor:"pointer"}} onClick={function() { props.onDet(r); }}><td style={Object.assign({}, tdS, {fontWeight:600,color:"#6366f1",fontSize:12})}>{r.id}</td><td style={tdS}>{r.eNm}</td><td style={Object.assign({}, tdS, {fontSize:12})}>{r.site}</td><td style={tdS}>{r.title}</td><td style={tdS}><Tag>{r.otType}</Tag></td><td style={Object.assign({}, tdS, {fontSize:12,color:"#64748b"})}>{r.date}</td><td style={Object.assign({}, tdS, {fontWeight:700})}>{r.hrs}h{r.hol && <span style={{color:"#f43f5e",fontSize:10,marginLeft:3}}>휴</span>}</td><td style={tdS}><Bdg s={r.status} /></td></tr>; })}
+    </tbody></table>
+  </div>);
+}
+
+function AnalPage(props) {
+  var emps = props.emps, siteNames = props.siteNames, allData = props.data;
+  var _selSite = useState(""), selSite = _selSite[0], setSelSite = _selSite[1];
+
+  var data = selSite ? allData.filter(function(r) { return r.site === selSite; }) : allData;
+  var filtEmps = selSite ? emps.filter(function(e) { return e.site === selSite; }) : emps;
+  var ap = data.filter(function(r) { return r.status === "APPROVED"; }), tot = ap.length;
+  var holC = ap.filter(function(r) { return r.hol; }).length, ngtC = ap.filter(function(r) { return r.ngt; }).length;
+  var avgH = filtEmps.length > 0 ? (ap.reduce(function(a, r) { return a + r.hrs; }, 0) / filtEmps.length).toFixed(1) : 0;
+  var over = filtEmps.filter(function(e) { return ap.filter(function(r) { return r.eId === e.id; }).reduce(function(a, r) { return a + r.hrs; }, 0) > 20; });
+
+  var dispSites = selSite ? [selSite] : siteNames;
+  var siteMo = dispSites.map(function(si) {
+    var sh = si.length > 6 ? si.substring(0, 6) + ".." : si;
+    var m1 = ap.filter(function(r) { return r.site === si && r.date.startsWith("2026-01"); }).reduce(function(a, r) { return a + r.hrs; }, 0);
+    var m2 = ap.filter(function(r) { return r.site === si && r.date.startsWith("2026-02"); }).reduce(function(a, r) { return a + r.hrs; }, 0);
+    var m3 = ap.filter(function(r) { return r.site === si && r.date.startsWith("2026-03"); }).reduce(function(a, r) { return a + r.hrs; }, 0);
+    return {site:sh, full:si, m1:m1, m2:m2, m3:m3, sum:m1 + m2 + m3};
+  });
+
+  /* 개인별 OT 현황 */
+  var empOT = filtEmps.map(function(e) {
+    var ea = ap.filter(function(r) { return r.eId === e.id; });
+    return {id:e.id, nm:e.nm, site:e.site, area:e.area, hrs:ea.reduce(function(a, r) { return a + r.hrs; }, 0), cnt:ea.length, hol:ea.filter(function(r) { return r.hol; }).length, ngt:ea.filter(function(r) { return r.ngt; }).length};
+  }).sort(function(a, b) { return b.hrs - a.hrs; });
+
+  return (<div>
+    {/* 사업소 필터 */}
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,flexWrap:"wrap"}}>
+      <div style={{fontSize:16,fontWeight:700}}>📈 분석</div>
+      <select style={Object.assign({}, inpS, {width:"auto",background:"#fff",fontWeight:600})} value={selSite} onChange={function(e) { setSelSite(e.target.value); }}>
+        <option value="">전체 사업소</option>
+        {siteNames.map(function(s) { return <option key={s}>{s}</option>; })}
+      </select>
+      {selSite && <span style={{fontSize:12,color:"#6366f1",fontWeight:600}}>📍 {selSite} 선택됨</span>}
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20}}>
+      <Kpi lb="휴일OT" vl={tot > 0 ? ((holC / tot) * 100).toFixed(1) : "0"} un="%" ac="#f43f5e" />
+      <Kpi lb="야간OT" vl={tot > 0 ? ((ngtC / tot) * 100).toFixed(1) : "0"} un="%" ac="#8b5cf6" />
+      <Kpi lb="인당평균" vl={avgH} un="h" ac="#0ea5e9" />
+      <Kpi lb="한도초과" vl={over.length} un="명" ac="#ef4444" />
+    </div>
+
+    <div style={card}>
+      <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>🗓 사업소×월 Heatmap {selSite ? "("+selSite+")" : "(전체)"}</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:13,textAlign:"center"}}>
+        <thead><tr>{["사업소","1월","2월","3월","합계"].map(function(h) { return <th key={h} style={thS}>{h}</th>; })}</tr></thead>
+        <tbody>{siteMo.map(function(r) { return <tr key={r.full}><td style={Object.assign({}, tdS, {fontWeight:600,textAlign:"left"})}>{r.site}</td>{[r.m1, r.m2, r.m3].map(function(v, i) { var it = Math.min(1, v / 80); return <td key={i} style={Object.assign({}, tdS, {fontWeight:700, background:"rgba(99,102,241," + (it * 0.3 + 0.03) + ")", color:it > 0.4 ? "#312e81" : "#6366f1"})}>{v}h</td>; })}<td style={Object.assign({}, tdS, {fontWeight:800,background:"#f8fafc"})}>{r.sum}h</td></tr>; })}</tbody>
+      </table></div>
+    </div>
+
+    {/* 개인별 OT 현황 */}
+    <div style={card}>
+      <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>👤 개인별 OT 현황 ({empOT.length}명)</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12}}>
+        <thead><tr>{["이름","사업소","업무","건수","총시간","휴일","야간","상태"].map(function(h) { return <th key={h} style={thS}>{h}</th>; })}</tr></thead>
+        <tbody>{empOT.slice(0, 30).map(function(e) { return <tr key={e.id}>
+          <td style={Object.assign({}, tdS, {fontWeight:600})}>{e.nm}</td>
+          <td style={Object.assign({}, tdS, {fontSize:11})}>{e.site}</td>
+          <td style={tdS}>{e.area}</td>
+          <td style={Object.assign({}, tdS, {textAlign:"center"})}>{e.cnt}건</td>
+          <td style={Object.assign({}, tdS, {fontWeight:700,color:e.hrs > 20 ? "#ef4444" : "#0f172a"})}>{e.hrs}h</td>
+          <td style={Object.assign({}, tdS, {textAlign:"center",color:"#f43f5e"})}>{e.hol}</td>
+          <td style={Object.assign({}, tdS, {textAlign:"center",color:"#8b5cf6"})}>{e.ngt}</td>
+          <td style={tdS}>{e.hrs > 20 ? <span style={{padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,background:"#ef444418",color:"#ef4444"}}>초과</span> : <span style={{padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,background:"#10b98118",color:"#10b981"}}>정상</span>}</td>
+        </tr>; })}</tbody>
+      </table></div>
+    </div>
+
+    {over.length > 0 && <div style={card}><div style={{fontSize:14,fontWeight:700,marginBottom:14}}>🚨 한도 초과 인원 ({over.length}명)</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>{over.map(function(e) { var h = ap.filter(function(r) { return r.eId === e.id; }).reduce(function(a, r) { return a + r.hrs; }, 0); return <div key={e.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#fef2f2",borderRadius:10,border:"1px solid #fecaca"}}><div style={{width:32,height:32,borderRadius:"50%",background:"#ef4444",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700}}>{e.nm[0]}</div><div style={{flex:1}}><div style={{fontWeight:600,fontSize:13}}>{e.nm}</div><div style={{fontSize:11,color:"#94a3b8"}}>{e.site}</div></div><div style={{fontSize:18,fontWeight:800,color:"#ef4444"}}>{h}h</div></div>; })}</div></div>}
+  </div>);
+}
+
+function ReportPage(props) {
+  var _sh = useState(false), show = _sh[0], setShow = _sh[1];
+  var siteNames = props.siteNames, emps = props.emps, allData = props.data;
+  var _selSite = useState(""), selSite = _selSite[0], setSelSite = _selSite[1];
+  var _month = useState("2026-03"), month = _month[0], setMonth = _month[1];
+  var _detailSite = useState(null), detailSite = _detailSite[0], setDetailSite = _detailSite[1];
+
+  var data = selSite ? allData.filter(function(r) { return r.site === selSite; }) : allData;
+  var filtered = data.filter(function(r) { return r.date.substring(0, 7) === month; });
+  var ap = filtered.filter(function(r) { return r.status === "APPROVED"; });
+  var totH = ap.reduce(function(a, r) { return a + r.hrs; }, 0);
+
+  var sA = (selSite ? [selSite] : siteNames).map(function(si) {
+    var sd = ap.filter(function(r) { return r.site === si; });
+    return {site:si, cnt:sd.length, hrs:sd.reduce(function(a, r) { return a + r.hrs; }, 0)};
+  });
+
+  /* 개인별 OT 이력 (선택 사업소 또는 전체) */
+  var filtEmps = selSite ? emps.filter(function(e) { return e.site === selSite; }) : emps;
+  var empDetail = filtEmps.map(function(e) {
+    var ea = ap.filter(function(r) { return r.eId === e.id; });
+    return {id:e.id, nm:e.nm, site:e.site, area:e.area, role:e.role, cnt:ea.length, hrs:ea.reduce(function(a, r) { return a + r.hrs; }, 0), hol:ea.filter(function(r) { return r.hol; }).length, ngt:ea.filter(function(r) { return r.ngt; }).length, records:ea};
+  }).sort(function(a, b) { return b.hrs - a.hrs; });
+
+  var reportTitle = selSite ? selSite + " OT 현황 보고서" : "전사 OT 현황 보고서";
+
+  return (<div>
+    {/* 조회 조건 */}
+    <div style={card}>
+      <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>📋 보고서 생성</div>
+      <div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap"}}>
+        <div><label style={lblS}>사업소</label><select style={Object.assign({}, inpS, {width:"auto",background:"#fff"})} value={selSite} onChange={function(e) { setSelSite(e.target.value); setShow(false); }}>
+          <option value="">전체 사업소</option>
+          {siteNames.map(function(s) { return <option key={s}>{s}</option>; })}
+        </select></div>
+        <div><label style={lblS}>기간</label><input type="month" value={month} onChange={function(e) { setMonth(e.target.value); setShow(false); }} style={Object.assign({}, inpS, {width:"auto"})} /></div>
+        <button style={bPri} onClick={function() { setShow(true); setDetailSite(null); }}>미리보기</button>
+        <button style={bDef}>📥 Excel</button>
+        <button style={bDef}>📥 PDF</button>
+      </div>
+    </div>
+
+    {show && <div style={card}>
+      {/* 보고서 헤더 */}
+      <div style={{textAlign:"center",marginBottom:24,paddingBottom:18,borderBottom:"2px solid #0f172a"}}>
+        <div style={{fontSize:10,color:"#94a3b8",letterSpacing:"2px",marginBottom:6}}>대웅그룹 OT 운영관리</div>
+        <h2 style={{fontSize:20,fontWeight:800}}>{reportTitle}</h2>
+        <div style={{fontSize:13,color:"#64748b",marginTop:4}}>{month} {selSite && <span style={{color:"#6366f1"}}>| {selSite}</span>}</div>
+      </div>
+
+      {/* 요약 KPI */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+        {[{l:"신청 건수",v:filtered.length + "건"},{l:"승인 시간",v:totH + "h"},{l:"승인율",v:filtered.length > 0 ? ((ap.length / filtered.length) * 100).toFixed(1) + "%" : "0%"},{l:"대상 인원",v:filtEmps.length + "명"}].map(function(i) {
+          return <div key={i.l} style={{textAlign:"center",padding:14,background:"#f8fafc",borderRadius:10}}><div style={{fontSize:11,color:"#94a3b8"}}>{i.l}</div><div style={{fontSize:20,fontWeight:800}}>{i.v}</div></div>;
+        })}
+      </div>
+
+      {/* 사업소별 집계 */}
+      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>🏢 사업소별 현황</h3>
+      <div style={{overflowX:"auto",marginBottom:20}}><table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:13}}>
+        <thead><tr>{["사업소","건수","시간","비중",""].map(function(h) { return <th key={h} style={thS}>{h}</th>; })}</tr></thead>
+        <tbody>{sA.map(function(si) { return <tr key={si.site}>
+          <td style={Object.assign({}, tdS, {fontWeight:600})}>{si.site}</td>
+          <td style={tdS}>{si.cnt}건</td>
+          <td style={Object.assign({}, tdS, {fontWeight:700})}>{si.hrs}h</td>
+          <td style={tdS}>{totH > 0 ? ((si.hrs / totH) * 100).toFixed(1) : "0"}%</td>
+          <td style={tdS}><button style={Object.assign({}, bSm, {color:"#6366f1"})} onClick={function() { setDetailSite(detailSite === si.site ? null : si.site); }}>
+            {detailSite === si.site ? "접기" : "개인별 ▼"}
+          </button></td>
+        </tr>; })}
+        <tr style={{background:"#f8fafc"}}><td style={Object.assign({}, tdS, {fontWeight:800})}>합계</td><td style={Object.assign({}, tdS, {fontWeight:700})}>{sA.reduce(function(a, s) { return a + s.cnt; }, 0)}건</td><td style={Object.assign({}, tdS, {fontWeight:800,color:"#6366f1"})}>{totH}h</td><td style={Object.assign({}, tdS, {fontWeight:700})}>100%</td><td style={tdS}></td></tr>
+        </tbody>
+      </table></div>
+
+      {/* 개인별 OT 이력 (사업소 클릭 시 또는 전체) */}
+      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>👤 개인별 OT 이력 {detailSite ? "— " + detailSite : selSite ? "— " + selSite : "— 전체"}</h3>
+      <div style={{overflowX:"auto",marginBottom:16}}><table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12}}>
+        <thead><tr>{["이름","사업소","업무","직급","건수","총시간","휴일","야간","비중"].map(function(h) { return <th key={h} style={thS}>{h}</th>; })}</tr></thead>
+        <tbody>
+          {(detailSite ? empDetail.filter(function(e) { return e.site === detailSite; }) : empDetail).filter(function(e) { return e.cnt > 0; }).map(function(e) {
+            return <tr key={e.id}>
+              <td style={Object.assign({}, tdS, {fontWeight:600})}><div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:24,height:24,borderRadius:"50%",background:e.hrs > 20 ? "#ef444418" : "#6366f118",color:e.hrs > 20 ? "#ef4444" : "#6366f1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0}}>{e.nm[0]}</div>{e.nm}</div></td>
+              <td style={Object.assign({}, tdS, {fontSize:11})}>{e.site}</td>
+              <td style={tdS}>{e.area}</td>
+              <td style={Object.assign({}, tdS, {fontSize:11})}>{e.role}</td>
+              <td style={Object.assign({}, tdS, {textAlign:"center"})}>{e.cnt}건</td>
+              <td style={Object.assign({}, tdS, {fontWeight:700,color:e.hrs > 20 ? "#ef4444" : "#0f172a"})}>{e.hrs}h</td>
+              <td style={Object.assign({}, tdS, {textAlign:"center",color:"#f43f5e"})}>{e.hol}건</td>
+              <td style={Object.assign({}, tdS, {textAlign:"center",color:"#8b5cf6"})}>{e.ngt}건</td>
+              <td style={tdS}>{totH > 0 ? ((e.hrs / totH) * 100).toFixed(1) : "0"}%</td>
+            </tr>;
+          })}
+          {(detailSite ? empDetail.filter(function(e) { return e.site === detailSite; }) : empDetail).filter(function(e) { return e.cnt > 0; }).length === 0 && <tr><td colSpan={9} style={{textAlign:"center",padding:30,color:"#94a3b8"}}>해당 기간 OT 이력이 없습니다.</td></tr>}
+        </tbody>
+      </table></div>
+
+      {/* 개인별 상세 OT 건별 이력 (상위 10명) */}
+      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>📝 OT 건별 상세 이력</h3>
+      {(detailSite ? empDetail.filter(function(e) { return e.site === detailSite && e.cnt > 0; }) : empDetail.filter(function(e) { return e.cnt > 0; })).slice(0, 10).map(function(e) {
+        return <div key={e.id} style={{marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"#f8fafc",borderRadius:"8px 8px 0 0",borderBottom:"2px solid #e5e7eb"}}>
+            <div style={{width:28,height:28,borderRadius:"50%",background:e.hrs > 20 ? "#ef444418" : "#6366f118",color:e.hrs > 20 ? "#ef4444" : "#6366f1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700}}>{e.nm[0]}</div>
+            <div><span style={{fontWeight:700,fontSize:13}}>{e.nm}</span><span style={{fontSize:11,color:"#64748b",marginLeft:6}}>{e.site} · {e.area} · {e.role}</span></div>
+            <div style={{marginLeft:"auto",fontSize:13,fontWeight:800,color:e.hrs > 20 ? "#ef4444" : "#6366f1"}}>{e.hrs}h / {e.cnt}건</div>
+          </div>
+          <table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:11}}>
+            <thead><tr>{["날짜","제목","유형","시간","휴일","야간","상태"].map(function(h) { return <th key={h} style={Object.assign({}, thS, {fontSize:10,padding:"6px 8px"})}>{h}</th>; })}</tr></thead>
+            <tbody>{e.records.map(function(r) { return <tr key={r.id}>
+              <td style={Object.assign({}, tdS, {fontSize:11,padding:"6px 8px"})}>{r.date}</td>
+              <td style={Object.assign({}, tdS, {padding:"6px 8px"})}>{r.title}</td>
+              <td style={Object.assign({}, tdS, {padding:"6px 8px"})}><Tag>{r.otType}</Tag></td>
+              <td style={Object.assign({}, tdS, {fontWeight:700,padding:"6px 8px"})}>{r.sTime}~{r.eTime} ({r.hrs}h)</td>
+              <td style={Object.assign({}, tdS, {textAlign:"center",padding:"6px 8px",color:"#f43f5e"})}>{r.hol ? "●" : ""}</td>
+              <td style={Object.assign({}, tdS, {textAlign:"center",padding:"6px 8px",color:"#8b5cf6"})}>{r.ngt ? "●" : ""}</td>
+              <td style={Object.assign({}, tdS, {padding:"6px 8px"})}><Bdg s={r.status} /></td>
+            </tr>; })}</tbody>
+          </table>
+        </div>;
+      })}
+
+      {/* 분석 코멘트 */}
+      <div style={{background:"#fffbeb",border:"1px solid #fef3c7",borderRadius:10,padding:14,fontSize:13,lineHeight:1.8,color:"#92400e",marginTop:16}}>
+        • {selSite ? selSite + " 사업소" : "전사"} OT 총 {totH}h / {ap.length}건<br />
+        • 휴일 OT {ap.filter(function(r) { return r.hol; }).length}건 · 야간 OT {ap.filter(function(r) { return r.ngt; }).length}건<br />
+        • 한도초과(20h) 인원: {empDetail.filter(function(e) { return e.hrs > 20; }).length}명<br />
+        • 인당 평균: {filtEmps.length > 0 ? (totH / filtEmps.length).toFixed(1) : "0"}h
+      </div>
+    </div>}
+  </div>);
+}
+
+function SettPage(props) {
+  var _sv = useState(false), saved = _sv[0], setSaved = _sv[1];
+  var _tab = useState("policy"), tab = _tab[0], setTab = _tab[1];
+  function doSave() { setSaved(true); setTimeout(function() { setSaved(false); }, 2000); }
+  var sites = props.sites, siteNames = props.siteNames || [], emps = props.allEmps, notices = props.notices, isAdmin = props.isAdmin;
+  var corps = []; sites.forEach(function(s) { if (corps.indexOf(s.corp) < 0) corps.push(s.corp); }); corps.sort();
+  var _sfc = useState(""), sfc = _sfc[0], setSfc = _sfc[1];
+  var _mSearch = useState(""), mSearch = _mSearch[0], setMSearch = _mSearch[1];
+  var _mSite = useState(""), mSite = _mSite[0], setMSite = _mSite[1];
+  var _mRole = useState(""), mRole = _mRole[0], setMRole = _mRole[1];
+  var _mArea = useState(""), mArea = _mArea[0], setMArea = _mArea[1];
+
+  var tabs = [{id:"policy",l:"⚙️ 결재 정책"},{id:"sites",l:"🏢 사업소"},{id:"notice",l:"📢 공지"},{id:"members",l:"👥 회원·권한"},{id:"audit",l:"🔍 감사로그"}];
+  if (!isAdmin) tabs = tabs.filter(function(t) { return t.id === "policy" || t.id === "audit"; });
+
+  return (<div>
+    <div style={{display:"flex",borderBottom:"2px solid #e5e7eb",marginBottom:20}}>
+      {tabs.map(function(t) { return <button key={t.id} style={{padding:"10px 16px",cursor:"pointer",fontWeight:tab === t.id ? 700 : 500,fontSize:12,color:tab === t.id ? "#6366f1" : "#94a3b8",background:"transparent",border:"none",borderBottom:tab === t.id ? "2px solid #6366f1" : "2px solid transparent",marginBottom:-2}} onClick={function() { setTab(t.id); }}>{t.l}</button>; })}
+    </div>
+
+    {tab === "policy" && <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      <div style={card}><div style={{fontSize:14,fontWeight:700,marginBottom:14}}>⚙️ 결재 정책</div><div style={{marginBottom:12}}><label style={lblS}>결재라인</label><select style={Object.assign({}, inpS, {background:"#fff"})}><option>팀장→부서장 (2단계)</option><option>3단계</option></select></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}><div><label style={lblS}>월 상한(h)</label><input type="number" defaultValue={20} style={inpS} /></div><div><label style={lblS}>첨부기준(h↑)</label><input type="number" defaultValue={4} style={inpS} /></div></div>{["휴일 증빙 필수","지연 알림(24h)","중복 방지","승인전 집계제외"].map(function(l, i) { return <label key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:13,marginBottom:6}}><input type="checkbox" defaultChecked />{l}</label>; })}<button style={Object.assign({}, bPri, {marginTop:8})} onClick={doSave}>저장</button></div>
+      <div style={card}><div style={{fontSize:14,fontWeight:700,marginBottom:14}}>📧 이메일 알림</div>{["상신→결재자","반려→신청자","승인→신청자","지연 리마인드","초과→관리자","과다→인사팀"].map(function(l, i) { return <label key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:13,padding:"5px 0",borderBottom:"1px solid #fafbfc"}}><input type="checkbox" defaultChecked={i < 5} />{l}</label>; })}<button style={Object.assign({}, bPri, {marginTop:10})} onClick={doSave}>저장</button></div>
+    </div>}
+
+    {tab === "sites" && isAdmin && <div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}><Kpi lb="전체 사업소" vl={sites.length} ac="#6366f1" /><Kpi lb="활성" vl={sites.filter(function(s) { return s.status === "active"; }).length} ac="#10b981" /><Kpi lb="법인" vl={corps.length} ac="#0ea5e9" /><Kpi lb="총 인원" vl={sites.reduce(function(a, s) { return a + (s.fac || 0) + (s.clean || 0) + (s.sec || 0) + (s.food || 0); }, 0)} un="명" ac="#f59e0b" /></div>
+      <select style={Object.assign({}, inpS, {width:"auto",background:"#fff",marginBottom:14})} value={sfc} onChange={function(e) { setSfc(e.target.value); }}><option value="">전체 법인 ({corps.length})</option>{corps.map(function(c) { return <option key={c}>{c}</option>; })}</select>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+        {sites.filter(function(s) { return !sfc || s.corp === sfc; }).map(function(s) {
+          var t = (s.fac || 0) + (s.clean || 0) + (s.sec || 0) + (s.food || 0);
+          var sU = emps.filter(function(e) { return e.site === s.name; }).length;
+          return <div key={s.id} style={{background:"#fff",borderRadius:14,padding:18,boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
+            <div style={{fontSize:10,color:"#6366f1",fontWeight:500}}>{s.corp}</div>
+            <div style={{fontSize:14,fontWeight:700,marginTop:2}}>{s.name}</div>
+            <div style={{fontSize:12,color:"#64748b",margin:"6px 0"}}>시설 <b>{s.fac || 0}</b> · 미화 <b>{s.clean || 0}</b> · 보안 <b>{s.sec || 0}</b> · 식음 <b>{s.food || 0}</b> = <b>{t}명</b></div>
+            <div style={{fontSize:11,color:"#6366f1"}}>등록 회원: {sU}명</div>
+            {s.note && <div style={{fontSize:10,color:"#f59e0b",marginTop:4}}>📌 {s.note}</div>}
+          </div>;
+        })}
+      </div>
+    </div>}
+
+    {tab === "notice" && isAdmin && <div>
+      <button style={Object.assign({}, bPri, {marginBottom:16})} onClick={props.onAddNotice}>+ 공지 등록</button>
+      {notices.length === 0 && <div style={{textAlign:"center",padding:40,color:"#94a3b8",background:"#fff",borderRadius:14}}>등록된 공지가 없습니다.</div>}
+      {notices.map(function(n) { return <div key={n.id} style={{background:"#fff",borderRadius:14,padding:18,marginBottom:10,boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}><div style={{fontSize:14,fontWeight:700,marginBottom:4}}>{n.title}</div><div style={{fontSize:11,color:"#94a3b8",marginBottom:6}}>{n.author || ""} · {n.start || ""} ~ {n.end || ""}</div><div style={{fontSize:12,color:"#475569",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{n.content}</div><div style={{display:"flex",gap:6,marginTop:8}}><button style={bSm} onClick={function() { props.onEditNotice(n); }}>수정</button><button style={Object.assign({}, bSm, {color:"#ef4444"})} onClick={function() { props.onDelNotice(n.id); }}>삭제</button></div></div>; })}
+    </div>}
+
+    {tab === "members" && isAdmin && <div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}><Kpi lb="전체 회원" vl={emps.length} ac="#6366f1" /><Kpi lb="사업소장" vl={emps.filter(function(e) { return e.sysRole === "manager"; }).length} un="명" ac="#10b981" /><Kpi lb="담당자" vl={emps.filter(function(e) { return e.sysRole === "worker"; }).length} un="명" ac="#f59e0b" /><Kpi lb="열람자" vl={emps.filter(function(e) { return e.sysRole === "viewer"; }).length} un="명" ac="#94a3b8" /></div>
+      <div style={{background:"#fff",borderRadius:14,padding:18,boxShadow:"0 1px 3px rgba(0,0,0,0.05)",marginBottom:16}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>📋 메뉴 권한 매트릭스</div>
+        <div style={{fontSize:12,color:"#64748b",marginBottom:10}}>관리자 = 결재 + 설정관리 (OT 신청 제외) | 사업소장 = <b>결재 + OT 신청</b> | 담당자·열람자 = <b>OT 신청</b></div>
+        <table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12}}><thead><tr><th style={thS}>메뉴</th><th style={Object.assign({}, thS, {textAlign:"center"})}>관리자</th><th style={Object.assign({}, thS, {textAlign:"center"})}>사업소장</th><th style={Object.assign({}, thS, {textAlign:"center"})}>담당자</th><th style={Object.assign({}, thS, {textAlign:"center"})}>열람자</th></tr></thead><tbody>
+          {[{l:"대시보드",a:1,m:1,w:1,v:1},{l:"OT 신청",a:0,m:1,w:1,v:1},{l:"내 신청내역",a:1,m:1,w:1,v:1},{l:"결재함 (승인/반려)",a:1,m:1,w:0,v:0},{l:"분석",a:1,m:1,w:1,v:1},{l:"보고서",a:1,m:1,w:0,v:0},{l:"설정 — 결재정책",a:1,m:1,w:0,v:0},{l:"설정 — 사업소관리",a:1,m:0,w:0,v:0},{l:"설정 — 공지관리",a:1,m:0,w:0,v:0},{l:"설정 — 회원·권한",a:1,m:0,w:0,v:0}].map(function(m) { return <tr key={m.l}><td style={Object.assign({}, tdS, {fontWeight:600})}>{m.l}</td>{[m.a, m.m, m.w, m.v].map(function(v, i) { return <td key={i} style={Object.assign({}, tdS, {textAlign:"center",fontSize:14})}>{v ? "✅" : "—"}</td>; })}</tr>; })}
+        </tbody></table>
+      </div>
+      <div style={{background:"#fff",borderRadius:14,padding:18,boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+          <div style={{fontSize:14,fontWeight:700}}>👥 회원 목록 ({emps.length}명)</div>
+          <button style={Object.assign({}, bPri, {fontSize:12,padding:"7px 14px"})} onClick={props.onAddEmp}>+ 회원 등록</button>
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+          <input style={Object.assign({}, inpS, {width:160})} placeholder="🔍 이름 검색" value={mSearch} onChange={function(e) { setMSearch(e.target.value); }} />
+          <select style={Object.assign({}, inpS, {width:"auto",background:"#fff"})} value={mSite} onChange={function(e) { setMSite(e.target.value); }}><option value="">전체 사업소</option>{siteNames.map(function(s) { return <option key={s}>{s}</option>; })}</select>
+          <select style={Object.assign({}, inpS, {width:"auto",background:"#fff"})} value={mRole} onChange={function(e) { setMRole(e.target.value); }}><option value="">전체 역할</option><option value="manager">사업소장</option><option value="worker">담당자</option><option value="viewer">열람자</option></select>
+          <select style={Object.assign({}, inpS, {width:"auto",background:"#fff"})} value={mArea} onChange={function(e) { setMArea(e.target.value); }}><option value="">전체 업무</option><option value="시설">시설</option><option value="미화">미화</option><option value="보안">보안</option><option value="식음">식음</option><option value="기타">기타</option></select>
+        </div>
+        <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>회원을 클릭하면 상세 정보를 수정할 수 있습니다.</div>
+        <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12}}><thead><tr>{["이름","이메일","전화번호","사업소","업무","역할"].map(function(h) { return <th key={h} style={thS}>{h}</th>; })}</tr></thead><tbody>
+          {emps.filter(function(e) {
+            if (mSearch && e.nm.indexOf(mSearch) < 0) return false;
+            if (mSite && e.site !== mSite) return false;
+            if (mRole && e.sysRole !== mRole) return false;
+            if (mArea && e.area !== mArea) return false;
+            return true;
+          }).map(function(e) { return <tr key={e.id} style={{cursor:"pointer"}} onClick={function() { props.onEditEmp(e); }}>
+            <td style={Object.assign({}, tdS, {fontWeight:600})}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:28,height:28,borderRadius:"50%",background:(RC[e.sysRole] || "#94a3b8") + "18",color:RC[e.sysRole] || "#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0}}>{e.nm[0]}</div>{e.nm}</div></td>
+            <td style={Object.assign({}, tdS, {fontSize:10,color:"#64748b"})}>{e.email}</td>
+            <td style={Object.assign({}, tdS, {fontSize:10,color:"#64748b"})}>{e.phone || "—"}</td>
+            <td style={tdS}>{e.site}</td>
+            <td style={tdS}>{e.area}</td>
+            <td style={tdS}><span style={{padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:600,background:(RC[e.sysRole] || "#94a3b8") + "18",color:RC[e.sysRole] || "#94a3b8"}}>{RL[e.sysRole]}</span></td>
+          </tr>; })}
+        </tbody></table></div>
+      </div>
+    </div>}
+
+    {tab === "audit" && <div style={card}><div style={{fontSize:14,fontWeight:700,marginBottom:14}}>🔍 감사 로그</div><table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:13}}><thead><tr>{["일시","사용자","행위","대상"].map(function(h) { return <th key={h} style={thS}>{h}</th>; })}</tr></thead><tbody>{[{t:"03-24 14:32",u:"김민수",a:"신청",d:"OT-0073"},{t:"03-24 14:28",u:"송태준",a:"승인",d:"OT-0070"},{t:"03-24 13:55",u:"오현우",a:"반려",d:"OT-0068"},{t:"03-24 11:20",u:"임지수",a:"정책변경",d:"설정"}].map(function(l, i) { return <tr key={i}><td style={Object.assign({}, tdS, {fontSize:12,color:"#64748b"})}>{l.t}</td><td style={tdS}>{l.u}</td><td style={tdS}><Tag>{l.a}</Tag></td><td style={Object.assign({}, tdS, {fontWeight:600,color:"#6366f1",fontSize:12})}>{l.d}</td></tr>; })}</tbody></table></div>}
+
+    {saved && <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#10b981",color:"#fff",padding:"12px 28px",borderRadius:10,fontSize:13,fontWeight:600,zIndex:2000}}>✓ 저장</div>}
+  </div>);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   견적 시뮬레이션 (QUOTATION TOOL)
+   대웅 그룹사 건물종합관리용역 도급내역서 기반
+   ═══════════════════════════════════════════════════════════ */
+
+/* 숫자 유틸 */
+function r10(n) { return Math.round((Number(n) || 0) / 10) * 10; }            /* ROUND(x,-1) */
+function r0(n) { return Math.round(Number(n) || 0); }                          /* ROUND(x,0) */
+function nf(n) { return Math.round(Number(n) || 0).toLocaleString("ko-KR"); }  /* 천단위 콤마 */
+function won(n) { return "₩" + nf(n); }
+
+/* 기본 설정값 (법령·정책 변경 시 설정에서 관리) */
+var Q_DEF_SET = {
+  weekHours: 209,      /* 주간직 기본시간 */
+  shiftHours: 213,     /* 교대직 기본시간 */
+  stdHours: 9,         /* 소정근로시간 */
+  minWage: 10030,      /* 해당년도 법정최저시급 (편집 가능) */
+  rPension: 4.75,      /* 국민연금 % */
+  rAccident: 0.860,    /* 산재보험 % */
+  rHealth: 3.595,      /* 건강보험 % */
+  rEmploy: 1.75,       /* 고용보험 % */
+  rCare: 0.5,          /* 장기요양 % */
+  rBizTax: 12.95,      /* 사업소세 (건강보험 대비) % */
+  adminRate: 5.0,      /* 일반관리비 % */
+  profitRate: 10.0,    /* 기업이윤 % */
+  vat: 10.0            /* 부가세 % */
+};
+
+var Q_SEED_ROWS = [
+  {id:"q1",label:"시설관리 (주간)",area:"시설",count:3,workType:"week",hourly:11000,basic:2400000,posPay:200000,qualPay:50000,otHours:0,otApply:false,ntHours:0,ntApply:false,annualDays:10},
+  {id:"q2",label:"보안 (교대)",area:"보안",count:4,workType:"shift",hourly:10500,basic:2300000,posPay:0,qualPay:0,otHours:34,otApply:true,ntHours:60,ntApply:true,annualDays:10},
+  {id:"q3",label:"미화 (주간)",area:"미화",count:6,workType:"week",hourly:10100,basic:2096270,posPay:0,qualPay:0,otHours:0,otApply:false,ntHours:0,ntApply:false,annualDays:10}
+];
+var Q_SEED_GEN = [
+  {id:"g1",nm:"피복비",unit:120000,qty:1,nightBased:false},
+  {id:"g2",nm:"특수검진비",unit:80000,qty:1,nightBased:false},
+  {id:"g3",nm:"선물비",unit:100000,qty:1,nightBased:false},
+  {id:"g4",nm:"운영비",unit:50000,qty:1,nightBased:false},
+  {id:"g5",nm:"특수검진비(야간)",unit:60000,qty:1,nightBased:true}
+];
+var Q_SEED_OTH = [
+  {id:"o1",nm:"수수료",unit:30000,qty:1},
+  {id:"o2",nm:"식대",unit:220000,qty:1}
+];
+
+/* 한 인원(직군) 행의 모든 파생값 계산 — 모든 금액은 1인 기준 */
+function qCalcRow(r, s) {
+  var baseHours = r.workType === "shift" ? s.shiftHours : s.weekHours;
+  var basic = Number(r.basic) || 0, pos = Number(r.posPay) || 0, qual = Number(r.qualPay) || 0;
+  var common = r0((basic + pos) / baseHours);                 /* 통상시급 = ROUND((기본급여+직책수당)/기본시간,0) */
+  var ot = r.otApply ? r10((Number(r.otHours) || 0) * common * 1.5) : 0;
+  var nt = r.ntApply ? r10((Number(r.ntHours) || 0) * common * 0.5) : 0;
+  var annual = r10(s.stdHours * common * (Number(r.annualDays) || 0) / 12);
+  var directBase = basic + pos + qual + ot + nt + annual;     /* 기본급여~연차수당 합 */
+  var retire = r10(directBase / 12);                          /* 퇴직충당금 */
+  var directSum = directBase + retire;                        /* 직접인건비 소계 */
+  var monthlyPay = directSum - retire - annual;              /* 월급여(실지급) = 소계−퇴직충당금−연차수당 */
+  /* 간접인건비 — 기준은 directBase (퇴직충당금 제외) */
+  var pension = r0(directBase * s.rPension / 100);
+  var accident = r0(directBase * s.rAccident / 100);
+  var health = r0(directBase * s.rHealth / 100);
+  var employ = r0(directBase * s.rEmploy / 100);
+  var care = r0(directBase * s.rCare / 100);
+  var bizTax = r0(health * s.rBizTax / 100);
+  var indirectSum = pension + accident + health + employ + care + bizTax;
+  return {baseHours:baseHours, common:common, ot:ot, nt:nt, annual:annual, directBase:directBase,
+    retire:retire, directSum:directSum, monthlyPay:monthlyPay, pension:pension, accident:accident,
+    health:health, employ:employ, care:care, bizTax:bizTax, indirectSum:indirectSum,
+    belowMin: (Number(r.hourly) || 0) < s.minWage};
+}
+
+/* 전체 견적 집계 */
+function qCalcAll(rows, gen, oth, s) {
+  var totalHead = rows.reduce(function(a, r) { return a + (Number(r.count) || 0); }, 0);
+  var nightHead = rows.reduce(function(a, r) { return a + (r.ntApply ? (Number(r.count) || 0) : 0); }, 0);
+  var genTotal = gen.reduce(function(a, g) { return a + (g.nightBased ? (Number(g.unit) || 0) * nightHead : (Number(g.unit) || 0) * (Number(g.qty) || 0)); }, 0);
+  var othTotal = oth.reduce(function(a, o) { return a + (Number(o.unit) || 0) * (Number(o.qty) || 0); }, 0);
+  var etcTotal = genTotal + othTotal;                          /* 기타비용 총계 */
+  var allocPerHead = totalHead > 0 ? etcTotal / totalHead : 0; /* 1인당 기타비용 배분 */
+  var calc = rows.map(function(r) {
+    var c = qCalcRow(r, s);
+    c.etc = allocPerHead;
+    c.junggye = c.directSum + c.indirectSum + c.etc;           /* 중계 = 직접+간접+기타 */
+    c.admin = r0(c.junggye * s.adminRate / 100);               /* 일반관리비 */
+    c.profit = r0((c.junggye + c.admin) * s.profitRate / 100); /* 기업이윤 */
+    c.exVat = c.junggye + c.admin + c.profit;                  /* 월간합계 부가세별도 (1인) */
+    c.inVat = r0(c.exVat * (1 + s.vat / 100));                 /* 월간합계 부가세포함 (1인) */
+    var cnt = Number(r.count) || 0;
+    c.count = cnt;
+    c.rowExVat = c.exVat * cnt;
+    c.rowInVat = c.inVat * cnt;
+    c.rowIndirect = c.indirectSum * cnt;                       /* 행 간접인건비 (조정불가) */
+    return c;
+  });
+  var totalExVat = calc.reduce(function(a, c) { return a + c.rowExVat; }, 0);
+  var totalIndirect = calc.reduce(function(a, c) { return a + c.rowIndirect; }, 0);
+  var totalInVat = r0(totalExVat * (1 + s.vat / 100));
+  return {calc:calc, totalHead:totalHead, nightHead:nightHead, genTotal:genTotal, othTotal:othTotal,
+    etcTotal:etcTotal, allocPerHead:allocPerHead, totalExVat:totalExVat, totalInVat:totalInVat,
+    totalIndirect:totalIndirect};
+}
+
+/* 엑셀(견적서 양식) 다운로드 — 외부 라이브러리 없이 .xls(HTML) 생성 */
+function qExportExcel(rows, gen, oth, s, agg, prices) {
+  var th = "border:1px solid #999;padding:5px 8px;background:#f2f2f2;font-weight:bold;text-align:center;";
+  var td = "border:1px solid #999;padding:5px 8px;text-align:right;";
+  var tdL = "border:1px solid #999;padding:5px 8px;text-align:left;";
+  var h = "";
+  h += "<table style='border-collapse:collapse;font-family:맑은 고딕,Malgun Gothic;font-size:12px;'>";
+  h += "<tr><td colspan='13' style='font-size:20px;font-weight:bold;text-align:center;padding:14px;'>견  적  서</td></tr>";
+  h += "<tr><td colspan='13' style='text-align:right;padding:4px 8px;'>작성일: " + (new Date().toISOString().slice(0,10)) + "</td></tr>";
+  h += "<tr><td colspan='13' style='padding:4px 8px;'>건명: 대웅 그룹사 건물종합관리용역</td></tr>";
+  h += "<tr>" + ["직군/구분","인원","월급여","직접인건비","간접인건비","기타비용","중계","일반관리비","기업이윤","1인 단가(부가세별도)","행 합계(부가세별도)","부가세포함"].map(function(x, i) { return "<th style='" + th + "'>" + x + "</th>"; }).join("") + "</tr>";
+  rows.forEach(function(r, i) {
+    var c = agg.calc[i];
+    var unit = prices && prices[r.id] != null ? prices[r.id] : c.exVat;     /* 확정 단가 우선 */
+    var rowSum = unit * c.count;
+    h += "<tr>";
+    h += "<td style='" + tdL + "'>" + r.label + "</td>";
+    h += "<td style='" + td + "'>" + c.count + "</td>";
+    h += "<td style='" + td + "'>" + nf(c.monthlyPay) + "</td>";
+    h += "<td style='" + td + "'>" + nf(c.directSum) + "</td>";
+    h += "<td style='" + td + "'>" + nf(c.indirectSum) + "</td>";
+    h += "<td style='" + td + "'>" + nf(c.etc) + "</td>";
+    h += "<td style='" + td + "'>" + nf(c.junggye) + "</td>";
+    h += "<td style='" + td + "'>" + nf(c.admin) + "</td>";
+    h += "<td style='" + td + "'>" + nf(c.profit) + "</td>";
+    h += "<td style='" + td + "'>" + nf(unit) + "</td>";
+    h += "<td style='" + td + "'>" + nf(rowSum) + "</td>";
+    h += "<td style='" + td + "'>" + nf(r0(rowSum * (1 + s.vat / 100))) + "</td>";
+    h += "</tr>";
+  });
+  var gExVat = prices ? rows.reduce(function(a, r, i) { var u = prices[r.id] != null ? prices[r.id] : agg.calc[i].exVat; return a + u * agg.calc[i].count; }, 0) : agg.totalExVat;
+  h += "<tr><td colspan='10' style='" + th + "text-align:right;'>합계 (부가세 별도)</td><td colspan='2' style='" + td + "font-weight:bold;'>" + nf(gExVat) + "</td></tr>";
+  h += "<tr><td colspan='10' style='" + th + "text-align:right;'>합계 (부가세 포함)</td><td colspan='2' style='" + td + "font-weight:bold;'>" + nf(r0(gExVat * (1 + s.vat / 100))) + "</td></tr>";
+  h += "</table>";
+  /* 기타비용 내역 */
+  h += "<br/><table style='border-collapse:collapse;font-family:맑은 고딕;font-size:12px;'>";
+  h += "<tr><td colspan='4' style='font-weight:bold;padding:6px;'>[ 기타비용 내역 ]</td></tr>";
+  h += "<tr><th style='" + th + "'>항목</th><th style='" + th + "'>단가</th><th style='" + th + "'>수량</th><th style='" + th + "'>소계</th></tr>";
+  gen.forEach(function(g) { var q = g.nightBased ? agg.nightHead : (Number(g.qty) || 0); h += "<tr><td style='" + tdL + "'>" + g.nm + (g.nightBased ? " (야간인원)" : "") + "</td><td style='" + td + "'>" + nf(g.unit) + "</td><td style='" + td + "'>" + q + "</td><td style='" + td + "'>" + nf((Number(g.unit) || 0) * q) + "</td></tr>"; });
+  oth.forEach(function(o) { h += "<tr><td style='" + tdL + "'>" + o.nm + "</td><td style='" + td + "'>" + nf(o.unit) + "</td><td style='" + td + "'>" + (Number(o.qty) || 0) + "</td><td style='" + td + "'>" + nf((Number(o.unit) || 0) * (Number(o.qty) || 0)) + "</td></tr>"; });
+  h += "</table>";
+  var html = "<html><head><meta charset='UTF-8'></head><body>" + h + "</body></html>";
+  var blob = new Blob(["﻿", html], {type:"application/vnd.ms-excel;charset=utf-8"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = "견적서_대웅그룹사_" + (new Date().toISOString().slice(0,10)) + ".xls";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+}
+
+/* 작은 입력 셀 */
+function QCell(p) {
+  return <input type={p.type || "number"} value={p.value} onChange={function(e) { p.onChange(p.type === "text" ? e.target.value : (e.target.value === "" ? "" : Number(e.target.value))); }}
+    style={{width:p.w || 90,padding:"6px 8px",borderRadius:6,border:"1px solid " + (p.warn ? "#ef4444" : "#e2e8f0"),fontSize:12,textAlign:p.type === "text" ? "left" : "right",outline:"none",background:p.warn ? "#fef2f2" : "#fff"}} />;
+}
+
+function QuotationPage() {
+  var _s = useState(Q_DEF_SET), set = _s[0], setSet = _s[1];
+  var _r = useState(Q_SEED_ROWS), rows = _r[0], setRows = _r[1];
+  var _g = useState(Q_SEED_GEN), gen = _g[0], setGen = _g[1];
+  var _o = useState(Q_SEED_OTH), oth = _o[0], setOth = _o[1];
+  var _sg = useState(false), showSet = _sg[0], setShowSet = _sg[1];
+  var _tg = useState(null), target = _tg[0], setTarget = _tg[1];   /* 시뮬레이션 목표금액 */
+  var _cf = useState(null), confirmed = _cf[0], setConfirmed = _cf[1]; /* 확정 단가 map */
+  var _ts = useState(null), toast = _ts[0], setToast = _ts[1];
+  function doToast(m) { setToast(m); setTimeout(function() { setToast(null); }, 2500); }
+
+  var agg = useMemo(function() { return qCalcAll(rows, gen, oth, set); }, [rows, gen, oth, set]);
+  var baseTotal = agg.totalExVat;
+  var simTarget = target == null ? baseTotal : target;
+  var simMin = Math.round(baseTotal * 0.5), simMax = Math.round(baseTotal * 1.5);
+
+  /* 시뮬레이션: 간접인건비 고정, 나머지를 비율 조정해 목표금액 충족 */
+  var sim = useMemo(function() {
+    var fixed = agg.totalIndirect;
+    var adjustable = baseTotal - fixed;
+    var factor = adjustable > 0 ? (simTarget - fixed) / adjustable : 1;
+    if (factor < 0) factor = 0;
+    var perRow = agg.calc.map(function(c, i) {
+      var newUnit = c.indirectSum + (c.exVat - c.indirectSum) * factor;
+      return {id:rows[i].id, label:rows[i].label, count:c.count, oldUnit:c.exVat, newUnit:Math.round(newUnit), oldRow:c.rowExVat, newRow:Math.round(newUnit) * c.count, indirect:c.indirectSum};
+    });
+    var newTotal = perRow.reduce(function(a, p) { return a + p.newRow; }, 0);
+    return {factor:factor, perRow:perRow, newTotal:newTotal, fixed:fixed};
+  }, [agg, simTarget, baseTotal, rows]);
+
+  /* 행 조작 */
+  function updRow(id, k, v) { setRows(function(p) { return p.map(function(r) { return r.id === id ? Object.assign({}, r, makeUpd(k, v)) : r; }); }); }
+  function makeUpd(k, v) { var o = {}; o[k] = v; return o; }
+  function addRow() { setRows(function(p) { return p.concat([{id:"q" + Date.now(),label:"신규 직군",area:"시설",count:1,workType:"week",hourly:set.minWage,basic:2096270,posPay:0,qualPay:0,otHours:0,otApply:false,ntHours:0,ntApply:false,annualDays:10}]); }); }
+  function delRow(id) { setRows(function(p) { return p.filter(function(r) { return r.id !== id; }); }); }
+
+  function updGen(id, k, v) { setGen(function(p) { return p.map(function(g) { return g.id === id ? Object.assign({}, g, makeUpd(k, v)) : g; }); }); }
+  function addGen() { setGen(function(p) { return p.concat([{id:"g" + Date.now(),nm:"신규 제경비",unit:0,qty:1,nightBased:false}]); }); }
+  function delGen(id) { setGen(function(p) { return p.filter(function(g) { return g.id !== id; }); }); }
+  function updOth(id, k, v) { setOth(function(p) { return p.map(function(o) { return o.id === id ? Object.assign({}, o, makeUpd(k, v)) : o; }); }); }
+  function addOth() { setOth(function(p) { return p.concat([{id:"o" + Date.now(),nm:"신규 기타경비",unit:0,qty:1}]); }); }
+  function delOth(id) { setOth(function(p) { return p.filter(function(o) { return o.id !== id; }); }); }
+  function updSet(k, v) { setSet(function(p) { return Object.assign({}, p, makeUpd(k, v)); }); }
+
+  var sumCard = {background:"#fff",borderRadius:14,boxShadow:"0 1px 3px rgba(0,0,0,0.05)",padding:"16px 18px"};
+  var miniLbl = {fontSize:11,color:"#64748b",marginBottom:4};
+  var miniVal = {fontSize:20,fontWeight:800,color:"#0f172a"};
+
+  function confirmSim() {
+    var m = {};
+    sim.perRow.forEach(function(p) { m[p.id] = p.newUnit; });
+    setConfirmed(m); doToast("조정 단가가 확정되었습니다. 엑셀 다운로드에 반영됩니다.");
+  }
+  function resetSim() { setTarget(null); setConfirmed(null); doToast("기준 단가로 초기화"); }
+
+  return (
+    <div>
+      {/* 상단 요약 */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:18}}>
+        <div style={Object.assign({}, sumCard, {borderLeft:"4px solid #6366f1"})}><div style={miniLbl}>총 인원</div><div style={miniVal}>{agg.totalHead}<span style={{fontSize:13,fontWeight:400,color:"#94a3b8"}}> 명</span></div></div>
+        <div style={Object.assign({}, sumCard, {borderLeft:"4px solid #0ea5e9"})}><div style={miniLbl}>간접인건비 (조정불가)</div><div style={miniVal}>{won(agg.totalIndirect)}</div></div>
+        <div style={Object.assign({}, sumCard, {borderLeft:"4px solid #f59e0b"})}><div style={miniLbl}>기타비용 총계</div><div style={miniVal}>{won(agg.etcTotal)}</div></div>
+        <div style={Object.assign({}, sumCard, {borderLeft:"4px solid #10b981"})}><div style={miniLbl}>총 견적 (부가세 별도)</div><div style={miniVal}>{won(agg.totalExVat)}</div></div>
+        <div style={Object.assign({}, sumCard, {borderLeft:"4px solid #8b5cf6"})}><div style={miniLbl}>총 견적 (부가세 포함)</div><div style={miniVal}>{won(agg.totalInVat)}</div></div>
+      </div>
+
+      {/* 인원 / 근무·직접인건비 입력 */}
+      <div style={card}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div style={{fontSize:15,fontWeight:700}}>👥 인원 · 근무시간 · 직접인건비</div>
+          <div style={{display:"flex",gap:8}}>
+            <button style={bSm} onClick={function() { setShowSet(!showSet); }}>⚙️ 요율·근무 설정</button>
+            <button style={bPri} onClick={addRow}>+ 인원 추가</button>
+          </div>
+        </div>
+
+        {showSet && <div style={{background:"#f8fafc",borderRadius:10,padding:16,marginBottom:16,border:"1px solid #e2e8f0"}}>
+          <div style={{fontSize:13,fontWeight:700,marginBottom:10}}>설정 (법령·정책 변경 시 수정)</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>
+            {[["weekHours","주간직 기본시간"],["shiftHours","교대직 기본시간"],["stdHours","소정근로시간"],["minWage","법정최저시급(원)"],["rPension","국민연금 %"],["rAccident","산재보험 %"],["rHealth","건강보험 %"],["rEmploy","고용보험 %"],["rCare","장기요양 %"],["rBizTax","사업소세 %"],["adminRate","일반관리비 %"],["profitRate","기업이윤 %"],["vat","부가세 %"]].map(function(f) {
+              return <div key={f[0]}><label style={lblS}>{f[1]}</label><QCell value={set[f[0]]} w={"100%"} onChange={function(v) { updSet(f[0], v); }} /></div>;
+            })}
+          </div>
+        </div>}
+
+        <div style={{overflowX:"auto"}}>
+          <table style={{borderCollapse:"separate",borderSpacing:0,fontSize:12,whiteSpace:"nowrap"}}>
+            <thead><tr>{["직군/구분","인원","근무형태","시간급","기본급여","직책수당","자격수당","연장","야간","연차일","통상시급","월급여(실지급)",""].map(function(h, i) { return <th key={i} style={Object.assign({}, thS, {textAlign:"center"})}>{h}</th>; })}</tr></thead>
+            <tbody>{rows.map(function(r) {
+              var c = qCalcRow(r, set);
+              return <tr key={r.id}>
+                <td style={tdS}><QCell type="text" w={120} value={r.label} onChange={function(v) { updRow(r.id, "label", v); }} /></td>
+                <td style={tdS}><QCell w={54} value={r.count} onChange={function(v) { updRow(r.id, "count", v); }} /></td>
+                <td style={tdS}><select value={r.workType} onChange={function(e) { updRow(r.id, "workType", e.target.value); }} style={{padding:"6px 6px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:12}}><option value="week">주간직({set.weekHours})</option><option value="shift">교대직({set.shiftHours})</option></select></td>
+                <td style={tdS}><QCell w={80} value={r.hourly} warn={c.belowMin} onChange={function(v) { updRow(r.id, "hourly", v); }} />{c.belowMin && <div style={{fontSize:9.5,color:"#ef4444",marginTop:2}}>최저시급 미만!</div>}</td>
+                <td style={tdS}><QCell w={92} value={r.basic} onChange={function(v) { updRow(r.id, "basic", v); }} /></td>
+                <td style={tdS}><QCell w={80} value={r.posPay} onChange={function(v) { updRow(r.id, "posPay", v); }} /></td>
+                <td style={tdS}><QCell w={80} value={r.qualPay} onChange={function(v) { updRow(r.id, "qualPay", v); }} /></td>
+                <td style={tdS}><div style={{display:"flex",alignItems:"center",gap:4}}><input type="checkbox" checked={r.otApply} onChange={function(e) { updRow(r.id, "otApply", e.target.checked); }} title="연장근로 적용" /><QCell w={48} value={r.otHours} onChange={function(v) { updRow(r.id, "otHours", v); }} /><span style={{fontSize:9.5,color:"#94a3b8"}}>h</span></div></td>
+                <td style={tdS}><div style={{display:"flex",alignItems:"center",gap:4}}><input type="checkbox" checked={r.ntApply} onChange={function(e) { updRow(r.id, "ntApply", e.target.checked); }} title="야간근로 적용" /><QCell w={48} value={r.ntHours} onChange={function(v) { updRow(r.id, "ntHours", v); }} /><span style={{fontSize:9.5,color:"#94a3b8"}}>h</span></div></td>
+                <td style={tdS}><QCell w={44} value={r.annualDays} onChange={function(v) { updRow(r.id, "annualDays", v); }} /></td>
+                <td style={Object.assign({}, tdS, {textAlign:"right",color:"#475569"})}>{nf(c.common)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right",fontWeight:700,color:"#6366f1"})}>{nf(c.monthlyPay)}</td>
+                <td style={tdS}><button onClick={function() { delRow(r.id); }} style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#ef4444",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:12}}>✕</button></td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 인원별 비용 산출 (직접·간접·기타·이윤) */}
+      <div style={card}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:14}}>💰 인원별 비용 산출</div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{borderCollapse:"separate",borderSpacing:0,fontSize:12,whiteSpace:"nowrap"}}>
+            <thead><tr>{["직군","연장수당","야간수당","연차수당","퇴직충당금","직접인건비계","간접인건비계","기타비용(1인)","중계","일반관리비","기업이윤","부가세별도(1인)","부가세포함(1인)","행 합계(별도)"].map(function(h, i) { return <th key={i} style={Object.assign({}, thS, {textAlign:i === 0 ? "left" : "right"})}>{h}</th>; })}</tr></thead>
+            <tbody>{rows.map(function(r, i) {
+              var c = agg.calc[i];
+              return <tr key={r.id}>
+                <td style={Object.assign({}, tdS, {fontWeight:600})}>{r.label} <span style={{color:"#94a3b8",fontWeight:400}}>×{c.count}</span></td>
+                <td style={Object.assign({}, tdS, {textAlign:"right"})}>{nf(c.ot)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right"})}>{nf(c.nt)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right"})}>{nf(c.annual)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right"})}>{nf(c.retire)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right",fontWeight:600})}>{nf(c.directSum)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right",color:"#0ea5e9",fontWeight:600})}>{nf(c.indirectSum)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right"})}>{nf(c.etc)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right",fontWeight:600})}>{nf(c.junggye)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right"})}>{nf(c.admin)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right"})}>{nf(c.profit)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right",fontWeight:700})}>{nf(c.exVat)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right",color:"#8b5cf6"})}>{nf(c.inVat)}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"right",fontWeight:700,color:"#10b981"})}>{nf(c.rowExVat)}</td>
+              </tr>;
+            })}</tbody>
+            <tfoot><tr style={{background:"#f8fafc"}}>
+              <td style={Object.assign({}, tdS, {fontWeight:700})}>합계</td>
+              <td colSpan="5" style={tdS}></td>
+              <td style={Object.assign({}, tdS, {textAlign:"right",fontWeight:700,color:"#0ea5e9"})}>{nf(agg.totalIndirect)}</td>
+              <td colSpan="5" style={tdS}></td>
+              <td style={Object.assign({}, tdS, {textAlign:"right",fontWeight:800,color:"#10b981"})}>{nf(agg.totalExVat)}</td>
+            </tr></tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* 기타비용 (제경비 / 기타경비) */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+        <div style={card}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontSize:14,fontWeight:700}}>📦 제경비</div><button style={bSm} onClick={addGen}>+ 행 추가</button>
+          </div>
+          <table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12}}>
+            <thead><tr>{["항목","단가","수량","야간","소계",""].map(function(h, i) { return <th key={i} style={Object.assign({}, thS, {textAlign:i === 0 ? "left" : "center"})}>{h}</th>; })}</tr></thead>
+            <tbody>{gen.map(function(g) {
+              var q = g.nightBased ? agg.nightHead : (Number(g.qty) || 0);
+              return <tr key={g.id}>
+                <td style={tdS}><QCell type="text" w={110} value={g.nm} onChange={function(v) { updGen(g.id, "nm", v); }} /></td>
+                <td style={tdS}><QCell w={80} value={g.unit} onChange={function(v) { updGen(g.id, "unit", v); }} /></td>
+                <td style={tdS}>{g.nightBased ? <span style={{color:"#94a3b8"}}>{agg.nightHead}</span> : <QCell w={48} value={g.qty} onChange={function(v) { updGen(g.id, "qty", v); }} />}</td>
+                <td style={Object.assign({}, tdS, {textAlign:"center"})}><input type="checkbox" checked={g.nightBased} onChange={function(e) { updGen(g.id, "nightBased", e.target.checked); }} title="야간인원 × 단가" /></td>
+                <td style={Object.assign({}, tdS, {textAlign:"right",fontWeight:600})}>{nf((Number(g.unit) || 0) * q)}</td>
+                <td style={tdS}><button onClick={function() { delGen(g.id); }} style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#ef4444",borderRadius:6,padding:"3px 7px",cursor:"pointer"}}>✕</button></td>
+              </tr>;
+            })}</tbody>
+            <tfoot><tr style={{background:"#f8fafc"}}><td colSpan="4" style={Object.assign({}, tdS, {fontWeight:700})}>제경비 소계</td><td colSpan="2" style={Object.assign({}, tdS, {textAlign:"right",fontWeight:700})}>{nf(agg.genTotal)}</td></tr></tfoot>
+          </table>
+        </div>
+        <div style={card}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontSize:14,fontWeight:700}}>🧾 기타경비</div><button style={bSm} onClick={addOth}>+ 행 추가</button>
+          </div>
+          <table style={{width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12}}>
+            <thead><tr>{["항목","단가","수량","소계",""].map(function(h, i) { return <th key={i} style={Object.assign({}, thS, {textAlign:i === 0 ? "left" : "center"})}>{h}</th>; })}</tr></thead>
+            <tbody>{oth.map(function(o) {
+              return <tr key={o.id}>
+                <td style={tdS}><QCell type="text" w={120} value={o.nm} onChange={function(v) { updOth(o.id, "nm", v); }} /></td>
+                <td style={tdS}><QCell w={90} value={o.unit} onChange={function(v) { updOth(o.id, "unit", v); }} /></td>
+                <td style={tdS}><QCell w={54} value={o.qty} onChange={function(v) { updOth(o.id, "qty", v); }} /></td>
+                <td style={Object.assign({}, tdS, {textAlign:"right",fontWeight:600})}>{nf((Number(o.unit) || 0) * (Number(o.qty) || 0))}</td>
+                <td style={tdS}><button onClick={function() { delOth(o.id); }} style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#ef4444",borderRadius:6,padding:"3px 7px",cursor:"pointer"}}>✕</button></td>
+              </tr>;
+            })}</tbody>
+            <tfoot><tr style={{background:"#f8fafc"}}><td colSpan="3" style={Object.assign({}, tdS, {fontWeight:700})}>기타경비 소계</td><td colSpan="2" style={Object.assign({}, tdS, {textAlign:"right",fontWeight:700})}>{nf(agg.othTotal)}</td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* 시뮬레이션 */}
+      <div style={Object.assign({}, card, {borderTop:"3px solid #6366f1"})}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+          <div style={{fontSize:15,fontWeight:700}}>🎚️ 견적 시뮬레이션 (±50%)</div>
+          <div style={{fontSize:12,color:"#64748b"}}>간접인건비 {won(agg.totalIndirect)} 는 조정 불가</div>
+        </div>
+        <div style={{fontSize:12,color:"#94a3b8",marginBottom:14}}>총 견적금액을 ±50% 범위에서 조정하면 각 인원별 단가가 자동 제안됩니다. 담당자 판단 후 확정하세요.</div>
+        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:8}}>
+          <input type="range" min={simMin} max={simMax} step={Math.max(1, Math.round((simMax - simMin) / 200))} value={Math.min(simMax, Math.max(simMin, simTarget))} onChange={function(e) { setTarget(Number(e.target.value)); }} style={{flex:1,accentColor:"#6366f1"}} />
+          <div style={{textAlign:"right",minWidth:230}}>
+            <div style={{fontSize:11,color:"#64748b"}}>목표 견적금액 (부가세 별도)</div>
+            <div style={{fontSize:22,fontWeight:800,color:"#6366f1"}}>{won(simTarget)}</div>
+            <div style={{fontSize:11,color: simTarget >= baseTotal ? "#10b981" : "#ef4444",fontWeight:600}}>{simTarget >= baseTotal ? "+" : ""}{baseTotal > 0 ? ((simTarget / baseTotal - 1) * 100).toFixed(1) : 0}% vs 기준 {won(baseTotal)}</div>
+          </div>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:"#94a3b8",marginBottom:16}}><span>-50% ({won(simMin)})</span><span>기준</span><span>+50% ({won(simMax)})</span></div>
+
+        <div style={{background:"#f8fafc",borderRadius:10,padding:14,marginBottom:14}}>
+          <div style={{fontSize:13,fontWeight:700,marginBottom:10}}>📝 인원별 조정 단가 제안</div>
+          <div style={{display:"flex",flexDirection:"column",gap:7}}>
+            {sim.perRow.map(function(p) {
+              var diff = p.newUnit - p.oldUnit;
+              return <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,fontSize:12.5,padding:"8px 12px",background:"#fff",borderRadius:8,border:"1px solid #f1f5f9"}}>
+                <span style={{fontWeight:600,minWidth:140}}>{p.label} <span style={{color:"#94a3b8"}}>({p.count}명)</span></span>
+                <span style={{color:"#64748b"}}>1인당 {won(p.oldUnit)}</span>
+                <span style={{color:"#94a3b8"}}>→</span>
+                <span style={{fontWeight:700,color:"#6366f1"}}>{won(p.newUnit)}</span>
+                <span style={{fontSize:11,color: diff >= 0 ? "#10b981" : "#ef4444"}}>({diff >= 0 ? "+" : ""}{nf(diff)})</span>
+                <span style={{marginLeft:"auto",color:"#475569"}}>행 합계 {won(p.newRow)}</span>
+              </div>;
+            })}
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12,paddingTop:12,borderTop:"1px solid #e2e8f0"}}>
+            <span style={{fontSize:13,fontWeight:700}}>조정 후 합계 (부가세 별도)</span>
+            <span style={{fontSize:18,fontWeight:800,color:"#6366f1"}}>{won(sim.newTotal)}</span>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <button style={bDef} onClick={resetSim}>기준값으로 초기화</button>
+          <button style={bPri} onClick={confirmSim}>✓ 이 단가로 확정</button>
+        </div>
+      </div>
+
+      {/* 다운로드 */}
+      <div style={Object.assign({}, card, {display:"flex",justifyContent:"space-between",alignItems:"center"})}>
+        <div>
+          <div style={{fontSize:14,fontWeight:700}}>📥 견적서 엑셀 다운로드</div>
+          <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{confirmed ? "✓ 확정된 조정 단가로 출력됩니다." : "현재 산출된 기준 단가로 출력됩니다. (시뮬레이션 확정 시 조정 단가 반영)"}</div>
+        </div>
+        <button style={Object.assign({}, bSuc, {padding:"11px 22px",fontSize:14})} onClick={function() { qExportExcel(rows, gen, oth, set, agg, confirmed); doToast("견적서 엑셀이 생성되었습니다."); }}>⬇ 엑셀(.xls) 다운로드</button>
+      </div>
+
+      {toast && <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#0f172a",color:"#fff",padding:"12px 28px",borderRadius:12,fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(0,0,0,0.25)",zIndex:2000}}>✅ {toast}</div>}
+    </div>
+  );
+}
+
+/* ═══ MAIN APP ═══ */
+function App() {
+  var _allEmps = useState(function() { return buildEmps(); }), allEmps = _allEmps[0], setAllEmps = _allEmps[1];
+  var _sites = useState(DEF_SITES), sites = _sites[0];
+  var _notices = useState([]), notices = _notices[0], setNotices = _notices[1];
+  var siteNames = useMemo(function() { return sites.filter(function(s) { return s.status === "active"; }).map(function(s) { return s.name; }); }, [sites]);
+
+  /* Auth state */
+  var _auth = useState(null), auth = _auth[0], setAuth = _auth[1];
+  var _curSite = useState(""), curSite = _curSite[0], setCurSite = _curSite[1];
+  var _phase = useState("auth"), phase = _phase[0], setPhase = _phase[1];
+
+  /* App state */
+  var _pg = useState("dashboard"), page = _pg[0], setPage = _pg[1];
+  var _data = useState(function() { return makeSeed(allEmps, siteNames); }), data = _data[0], setData = _data[1];
+  var _sf = useState(false), showForm = _sf[0], setShowForm = _sf[1];
+  var _dl = useState(null), detail = _dl[0], setDetail = _dl[1];
+  var _ts = useState(null), toast = _ts[0], setToast = _ts[1];
+  var _ntM = useState(null), ntM = _ntM[0], setNtM = _ntM[1];
+  var _empM = useState(null), empM = _empM[0], setEmpM = _empM[1];
+
+  var isAdmin = auth && auth.email === "admin@daewoong.co.kr";
+  var canApprove = isAdmin || (auth && auth.canApprove);
+  var me = auth ? (isAdmin ? {id:"ADMIN",nm:auth.name,site:curSite === "__all__" ? "전체" : curSite,dept:"관리부",role:"관리자"} : allEmps.find(function(e) { return e.email === auth.email; }) || {id:"U001",nm:auth.name,site:curSite === "__all__" ? siteNames[0] : curSite,dept:"일반",role:"사원"}) : {id:"",nm:"",site:"",dept:"",role:""};
+
+  function doToast(m) { setToast(m); setTimeout(function() { setToast(null); }, 3000); }
+
+  function handleLogin(email, pw) {
+    if (!email || !pw) return "아이디와 비밀번호를 입력하세요.";
+    /* Admin account — 결재 + 관리 */
+    if (email === "admin@daewoong.co.kr" && pw === "admin1234") {
+      var u = {name:"시스템 관리자",email:email,isAdmin:true,canApprove:true,sites:["__all__"]};
+      setAuth(u); setPhase("sitesel"); return true;
+    }
+    /* Employee account */
+    var emp = allEmps.find(function(e) { return e.email === email; });
+    if (!emp || pw !== "user1234") return "아이디 또는 비밀번호가 올바르지 않습니다.";
+    var u2 = {name:emp.nm,email:emp.email,isAdmin:false,canApprove:emp.sysRole === "manager",sysRole:emp.sysRole,sites:[emp.site]};
+    setAuth(u2);
+    setCurSite(emp.site); setPhase("app");
+    return true;
+  }
+
+  var notis = useMemo(function() {
+    var n = [], ap = data.filter(function(r) { return r.status === "APPROVED"; });
+    allEmps.forEach(function(e) { var h = ap.filter(function(r) { return r.eId === e.id; }).reduce(function(a, r) { return a + r.hrs; }, 0); if (h > 20) n.push({lv:"위험",msg:e.nm + " — " + h + "h 한도초과",cl:"#ef4444",tm:"오늘"}); });
+    n.push({lv:"경고",msg:"OT 집중 사업소 주의",cl:"#f59e0b",tm:"1h전"});
+    n.push({lv:"정보",msg:"결재 지연 3건",cl:"#3b82f6",tm:"2h전"});
+    return n;
+  }, [data, allEmps]);
+  var unread = notis.length;
+  var pendC = data.filter(function(r) { return r.status === "SUBMITTED" || r.status === "APPROVED1"; }).length;
+
+  function handleSubmit(form, st) {
+    var nr = {id:"OT-2026-" + String(data.length + 1).padStart(4, "0"), eId:me.id, eNm:me.nm, site:me.site, dept:me.dept, role:me.role, title:form.title || "새 OT 신청", content:form.content, otType:form.otType, reason:form.reason, date:form.date, sTime:form.startTime, eTime:form.endTime, hrs:form.hrs, hol:form.isH, ngt:form.isN, status:st, apr1:form.a1, apr2:form.a2, ap2Op:"", rejR:null, subAt:st === "SUBMITTED" ? "2026-03-24 now" : null, apAt:null};
+    setData(function(prev) { return [nr].concat(prev); });
+    doToast(st === "DRAFT" ? "임시저장 완료" : "상신 완료 — 메일 발송");
+    if (st === "SUBMITTED") setPage("mylist");
+  }
+  function handleAction(id, newSt, op) {
+    setData(function(prev) { return prev.map(function(r) { if (r.id !== id) return r; var u = {}; for (var k in r) u[k] = r[k]; u.status = newSt; u.apAt = "2026-03-24 now"; if (newSt === "REJECTED") u.rejR = op; else u.ap2Op = op; return u; }); });
+    doToast(newSt === "APPROVED" ? "승인 완료" : "반려 완료");
+  }
+
+  /* Notice CRUD */
+  function handleSaveNotice(n) {
+    var arr = notices.slice();
+    if (n.id) { arr = arr.map(function(x) { return x.id === n.id ? n : x; }); }
+    else { n.id = "n" + Date.now(); n.author = auth.name; n.createdAt = new Date().toISOString(); arr.push(n); }
+    setNotices(arr); setNtM(null); doToast("저장됨");
+  }
+
+  /* Employee CRUD */
+  function handleSaveEmp(e) {
+    setAllEmps(function(prev) { return prev.map(function(x) { return x.id === e.id ? e : x; }); });
+    setEmpM(null); doToast("회원 정보 저장됨");
+  }
+  function handleDeleteEmp(id) {
+    setAllEmps(function(prev) { return prev.filter(function(x) { return x.id !== id; }); });
+    setEmpM(null); doToast("회원 삭제됨");
+  }
+  function handleAddEmp() {
+    var newE = {id:"E" + Date.now(),nm:"",email:"",pw:"user1234",phone:"",site:siteNames[0] || "",dept:"",role:"사원",area:"시설",sysRole:"viewer"};
+    setEmpM(newE);
+  }
+
+  /* NAVIGATION — role-based */
+  var navs = [{sec:"업무"},{id:"dashboard",lb:"대시보드",em:"📊"}];
+  if (!isAdmin) navs.push({id:"newOT",lb:"OT 신청",em:"➕",act:function() { setShowForm(true); }});
+  navs.push({id:"mylist",lb:"내 신청내역",em:"📋"});
+  navs.push({id:"notifs",lb:"알림함",em:"🔔",bd:unread});
+  if (canApprove) { navs.push({sec:"결재"}); navs.push({id:"approval",lb:"결재함",em:"✅",bd:pendC}); }
+  navs.push({sec:"분석·보고"});
+  navs.push({id:"analytics",lb:"분석",em:"📈"});
+  if (canApprove) navs.push({id:"reports",lb:"보고서",em:"📄"});
+  navs.push({sec:"견적"});
+  navs.push({id:"quote",lb:"견적 시뮬레이션",em:"🧮"});
+  navs.push({sec:"관리"});
+  navs.push({id:"settings",lb:"설정",em:"⚙️"});
+  var pgT = {dashboard:"대시보드",mylist:"내 신청내역",approval:"결재함",analytics:"분석",reports:"보고서",quote:"견적 시뮬레이션",settings:"설정",notifs:"알림함"};
+
+  /* RENDER PHASES */
+  if (phase === "auth") return <AuthScreen onLogin={handleLogin} />;
+  if (phase === "sitesel") return <SiteSelScreen user={auth} sites={sites} onSelect={function(s) { setCurSite(s); setPhase("app"); }} onLogout={function() { setAuth(null); setPhase("auth"); }} />;
+
+  return (
+    <div style={{display:"flex",height:"100vh",background:"#f0f2f5",fontSize:14,overflow:"hidden"}}>
+      {/* Sidebar */}
+      <div style={{width:250,background:"linear-gradient(180deg,#0c1222,#1a2744)",color:"#cbd5e1",display:"flex",flexDirection:"column",flexShrink:0}}>
+        <div style={{padding:"20px 20px 16px",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
+          <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>OT 운영관리</div>
+          <div style={{fontSize:10,color:"#64748b",marginTop:3}}>대웅그룹 · {curSite === "__all__" ? "전체" : curSite}</div>
+        </div>
+        <nav style={{flex:1,padding:"8px 0",overflowY:"auto"}}>
+          {navs.map(function(n, i) {
+            if (n.sec) return <div key={i} style={{padding:"16px 20px 5px",fontSize:9.5,fontWeight:700,textTransform:"uppercase",color:"#475569",letterSpacing:"1.5px"}}>{n.sec}</div>;
+            var active = page === n.id;
+            return <div key={n.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 20px",cursor:"pointer",background:active ? "rgba(99,102,241,0.12)" : "transparent",color:active ? "#a5b4fc" : "#94a3b8",fontWeight:active ? 600 : 400,fontSize:13,borderLeft:active ? "3px solid #6366f1" : "3px solid transparent"}} onClick={function() { if (n.act) n.act(); else setPage(n.id); }}>
+              <span>{n.em}</span><span style={{flex:1}}>{n.lb}</span>
+              {n.bd > 0 && <span style={{background:"#ef4444",color:"#fff",fontSize:10,fontWeight:700,padding:"1px 7px",borderRadius:10}}>{n.bd}</span>}
+            </div>;
+          })}
+        </nav>
+        <div style={{padding:"12px 20px",borderTop:"1px solid rgba(255,255,255,0.05)",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:30,height:30,borderRadius:"50%",background:isAdmin ? "#6366f1" : canApprove ? "#10b981" : "#f59e0b",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700}}>{me.nm ? me.nm[0] : "?"}</div>
+          <div><div style={{fontSize:13,fontWeight:600,color:"#e2e8f0"}}>{me.nm}</div><div style={{fontSize:10,color:"#64748b"}}>{isAdmin ? "관리자" : canApprove ? me.site + " · 사업소장 · 결재+신청" : me.site + " · " + (auth && auth.sysRole === "worker" ? "담당자" : "열람자") + " · 신청"}</div></div>
+        </div>
+      </div>
+
+      {/* Main */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <div style={{height:52,background:"#fff",borderBottom:"1px solid #e5e7eb",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",flexShrink:0}}>
+          <div style={{fontSize:16,fontWeight:700,color:"#0f172a"}}>{pgT[page] || "대시보드"} <span style={{fontSize:12,fontWeight:400,color:"#94a3b8"}}>2026-03-24</span></div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button style={bSm} onClick={function() { setPhase("sitesel"); }}>🏢 사업소 변경</button>
+            <span style={{cursor:"pointer",position:"relative"}} onClick={function() { setPage("notifs"); }}>🔔{unread > 0 && <span style={{position:"absolute",top:-4,right:-4,width:8,height:8,borderRadius:"50%",background:"#ef4444"}} />}</span>
+            {!isAdmin && <button style={Object.assign({}, bPri, {padding:"7px 14px",fontSize:12})} onClick={function() { setShowForm(true); }}>➕ 새 OT 신청</button>}
+            {isAdmin && <span style={{fontSize:11,color:"#6366f1",fontWeight:600,padding:"4px 10px",background:"#eef2ff",borderRadius:6}}>관리자 모드</span>}
+            <button style={Object.assign({}, bSm, {color:"#ef4444"})} onClick={function() { setAuth(null); setCurSite(""); setPhase("auth"); }}>로그아웃</button>
+          </div>
+        </div>
+        <div style={{flex:1,padding:22,overflowY:"auto",overflowX:"hidden"}}>
+          {page === "dashboard" && <DashPage data={data} emps={allEmps} siteNames={siteNames} noti={notis} onDet={setDetail} />}
+          {page === "mylist" && <ListPage data={data} onDet={setDetail} mine={true} meId={me.id} />}
+          {page === "approval" && canApprove && <ListPage data={data} onDet={setDetail} mine={false} meId={me.id} />}
+          {page === "analytics" && <AnalPage data={data} emps={allEmps} siteNames={siteNames} />}
+          {page === "reports" && <ReportPage data={data} emps={allEmps} siteNames={siteNames} />}
+          {page === "quote" && <QuotationPage />}
+          {page === "settings" && <SettPage sites={sites} siteNames={siteNames} allEmps={allEmps} notices={notices} isAdmin={isAdmin} onAddNotice={function() { setNtM({id:"",title:"",content:"",start:"",end:""}); }} onEditNotice={function(n) { setNtM(Object.assign({}, n)); }} onDelNotice={function(id) { setNotices(function(p) { return p.filter(function(x) { return x.id !== id; }); }); doToast("삭제됨"); }} onEditEmp={function(e) { setEmpM(Object.assign({}, e)); }} onAddEmp={handleAddEmp} />}
+          {page === "notifs" && <div style={card}><div style={{fontSize:14,fontWeight:700,marginBottom:14}}>🔔 알림함</div><div style={{display:"flex",flexDirection:"column",gap:6}}>{notis.map(function(n, i) { return <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:10,border:"1px solid #f1f5f9"}}><span style={{padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,background:n.cl + "18",color:n.cl}}>{n.lv}</span><span style={{fontSize:13,flex:1}}>{n.msg}</span><span style={{fontSize:10.5,color:"#94a3b8"}}>{n.tm}</span></div>; })}</div></div>}
+        </div>
+      </div>
+
+      {/* Modals */}
+      {showForm && <OTForm me={me} onClose={function() { setShowForm(false); }} onSubmit={handleSubmit} />}
+      {detail && <Detail req={detail} canApprove={canApprove} onClose={function() { setDetail(null); }} onAct={handleAction} />}
+
+      {/* Notice Modal */}
+      {ntM && <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={function() { setNtM(null); }}>
+        <div style={{background:"#fff",borderRadius:18,width:520,padding:26}} onClick={function(e) { e.stopPropagation(); }}>
+          <h3 style={{fontSize:16,fontWeight:700,marginBottom:16}}>{ntM.id ? "공지 수정" : "공지 등록"}</h3>
+          <div style={{marginBottom:10}}><label style={lblS}>제목 *</label><input style={inpS} defaultValue={ntM.title} onChange={function(e) { ntM.title = e.target.value; }} /></div>
+          <div style={{marginBottom:10}}><label style={lblS}>내용 *</label><textarea style={Object.assign({}, inpS, {minHeight:80,resize:"vertical"})} defaultValue={ntM.content} onChange={function(e) { ntM.content = e.target.value; }} /></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}><div><label style={lblS}>시작일</label><input type="date" style={inpS} defaultValue={ntM.start} onChange={function(e) { ntM.start = e.target.value; }} /></div><div><label style={lblS}>종료일</label><input type="date" style={inpS} defaultValue={ntM.end} onChange={function(e) { ntM.end = e.target.value; }} /></div></div>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8}}><button style={bDef} onClick={function() { setNtM(null); }}>취소</button><button style={bPri} onClick={function() { handleSaveNotice(Object.assign({}, ntM)); }}>저장</button></div>
+        </div>
+      </div>}
+
+      {/* Employee Edit Modal */}
+      {empM && <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={function() { setEmpM(null); }}>
+        <div style={{background:"#fff",borderRadius:18,width:560,maxHeight:"85vh",overflow:"auto",padding:28}} onClick={function(e) { e.stopPropagation(); }}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+            <div><h3 style={{fontSize:17,fontWeight:800}}>{empM.nm ? "회원 정보 수정" : "신규 회원 등록"}</h3><p style={{fontSize:11,color:"#94a3b8",marginTop:4}}>개별 회원의 정보를 수정할 수 있습니다</p></div>
+            <button onClick={function() { setEmpM(null); }} style={{background:"#f1f5f9",border:"none",cursor:"pointer",padding:"6px 10px",borderRadius:8,fontSize:16}}>✕</button>
+          </div>
+          {empM.nm && <div style={{display:"flex",alignItems:"center",gap:12,padding:14,background:"#f8fafc",borderRadius:10,marginBottom:18}}>
+            <div style={{width:44,height:44,borderRadius:"50%",background:(RC[empM.sysRole] || "#94a3b8") + "18",color:RC[empM.sysRole] || "#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:700,flexShrink:0}}>{empM.nm[0]}</div>
+            <div><div style={{fontSize:15,fontWeight:700}}>{empM.nm}</div><div style={{fontSize:11,color:"#94a3b8"}}>{empM.site} · {empM.area} · <span style={{color:RC[empM.sysRole]}}>{RL[empM.sysRole]}</span></div></div>
+          </div>}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+            <div><label style={lblS}>이름 *</label><input style={inpS} defaultValue={empM.nm} onChange={function(e) { empM.nm = e.target.value; }} /></div>
+            <div><label style={lblS}>아이디 (이메일) *</label><input style={inpS} defaultValue={empM.email} onChange={function(e) { empM.email = e.target.value; }} /></div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+            <div><label style={lblS}>비밀번호</label><input style={inpS} defaultValue={empM.pw || ""} placeholder="변경 시 입력" onChange={function(e) { empM.pw = e.target.value; }} /></div>
+            <div><label style={lblS}>전화번호</label><input style={inpS} defaultValue={empM.phone || ""} placeholder="010-0000-0000" onChange={function(e) { empM.phone = e.target.value; }} /></div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:14}}>
+            <div><label style={lblS}>사업소 *</label><select style={Object.assign({}, inpS, {background:"#fff"})} defaultValue={empM.site} onChange={function(e) { empM.site = e.target.value; }}>{siteNames.map(function(s) { return <option key={s}>{s}</option>; })}</select></div>
+            <div><label style={lblS}>업무 *</label><select style={Object.assign({}, inpS, {background:"#fff"})} defaultValue={empM.area} onChange={function(e) { empM.area = e.target.value; empM.dept = e.target.value + "팀"; }}><option value="시설">시설</option><option value="미화">미화</option><option value="보안">보안</option><option value="식음">식음</option><option value="기타">기타</option></select></div>
+            <div><label style={lblS}>역할 *</label><select style={Object.assign({}, inpS, {background:"#fff"})} defaultValue={empM.sysRole} onChange={function(e) { empM.sysRole = e.target.value; empM.role = e.target.value === "manager" ? "소장" : e.target.value === "worker" ? "반장" : "사원"; }}><option value="manager">사업소장 (결재권한)</option><option value="worker">담당자</option><option value="viewer">열람자</option></select></div>
+          </div>
+          <div style={{background:"#f8fafc",borderRadius:8,padding:12,marginBottom:18,fontSize:11,color:"#64748b",lineHeight:1.7}}>
+            <b>역할별 권한 안내</b><br />
+            · <span style={{color:"#10b981",fontWeight:600}}>사업소장</span> — 결재 승인/반려 + OT 신청 + 모든 메뉴<br />
+            · <span style={{color:"#f59e0b",fontWeight:600}}>담당자</span> — OT 신청 + 분석 조회<br />
+            · <span style={{color:"#94a3b8",fontWeight:600}}>열람자</span> — OT 신청 + 대시보드/내역 조회
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            {empM.nm && <button style={Object.assign({}, bSm, {color:"#ef4444",borderColor:"#fecaca",padding:"8px 14px"})} onClick={function() { if (confirm(empM.nm + " 회원을 삭제하시겠습니까?")) handleDeleteEmp(empM.id); }}>🗑 회원 삭제</button>}
+            {!empM.nm && <div />}
+            <div style={{display:"flex",gap:8}}>
+              <button style={bDef} onClick={function() { setEmpM(null); }}>취소</button>
+              <button style={bPri} onClick={function() {
+                var e = Object.assign({}, empM);
+                if (!e.nm || !e.email) { alert("이름과 이메일은 필수입니다."); return; }
+                if (allEmps.find(function(x) { return x.id === e.id; })) {
+                  handleSaveEmp(e);
+                } else {
+                  setAllEmps(function(prev) { return prev.concat([e]); });
+                  setEmpM(null); doToast("신규 회원 등록됨");
+                }
+              }}>저장</button>
+            </div>
+          </div>
+        </div>
+      </div>}
+
+      {toast && <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#0f172a",color:"#fff",padding:"12px 28px",borderRadius:12,fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(0,0,0,0.25)",zIndex:2000}}>✅ {toast}</div>}
+    </div>
+  );
+}
+
+
+document.getElementById("loading").style.display="none";
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+} catch(err) {
+  document.getElementById("loading").style.display="none";
+  var eb=document.getElementById("error-box");
+  eb.style.display="block";
+  eb.innerHTML="<h2>앱 실행 오류</h2><pre>"+err.message+"\n"+err.stack+"</pre>";
+}
+</script>
+</body>
+</html>
