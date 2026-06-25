@@ -485,6 +485,42 @@ try {
     color: "#013a73",
     fontWeight: 700
   });
+  var tdF2y = Object.assign({}, tdF2, {
+    background: "#FFF3C4",
+    color: INK,
+    fontWeight: 800
+  }); /* 2번 소계 노란 음영 */
+  var thF2y = Object.assign({}, thF2, {
+    background: "#B8860B"
+  }); /* 2번 소계 헤더 */
+  var tdYel = {
+    padding: "7px 10px",
+    borderBottom: "1px solid " + LINE,
+    color: INK,
+    fontSize: 12.5,
+    textAlign: "right",
+    whiteSpace: "nowrap",
+    background: "#FFF3C4",
+    fontWeight: 800
+  }; /* 소계/중계/합계 노란 음영 */
+  var thYel = {
+    padding: "9px 10px",
+    textAlign: "right",
+    fontWeight: 700,
+    color: "#fff",
+    fontSize: 11,
+    background: "#B8860B",
+    whiteSpace: "nowrap"
+  }; /* 노란 헤더 */
+  var tfY = {
+    padding: "8px 10px",
+    fontSize: 12.5,
+    fontWeight: 800,
+    color: "#7a5a00",
+    background: "#FFE89A",
+    textAlign: "right",
+    whiteSpace: "nowrap"
+  }; /* 노란 합계행 */
   var tfL = {
     padding: "8px 10px",
     fontSize: 12.5,
@@ -573,6 +609,7 @@ try {
         var d = e.target.value.replace(/[^0-9]/g, "");
         p.onChange(d === "" ? "" : Number(d));
       },
+      onBlur: p.onBlur,
       style: {
         width: p.w || 92,
         padding: "6px 8px",
@@ -1341,6 +1378,9 @@ try {
     var _ti = useState(""),
       title = _ti[0],
       setTitle = _ti[1];
+    var _si = useState(""),
+      site = _si[0],
+      setSite = _si[1];
     var _hi = useState(function () {
         return loadHist();
       }),
@@ -1641,6 +1681,7 @@ try {
       }) ? curHistId : uid("h");
       var e = {
         id: id,
+        site: site || "",
         title: title || "제목 없음",
         savedAt: new Date().toLocaleString("ko-KR"),
         total: agg.totalExVat,
@@ -1668,6 +1709,7 @@ try {
       setSet(clone(e.set || Q_DEF_SET));
       setDraft(qPick(e.set || Q_DEF_SET));
       setTitle(e.title || "");
+      setSite(e.site || "");
       setCurHistId(e.id);
       setSimPct(0);
       setSimTarget2("");
@@ -1774,69 +1816,106 @@ try {
         padding: "16px 4px",
         lineHeight: 1.6
       }
-    }, "\uC800\uC7A5\uB41C \uACAC\uC801\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.", /*#__PURE__*/React.createElement("br", null), "\uC81C\uBAA9 \uC785\uB825 \uD6C4 \uD83D\uDCBE \uC800\uC7A5\uD558\uC138\uC694.") : /*#__PURE__*/React.createElement("div", {
+    }, "\uC800\uC7A5\uB41C \uACAC\uC801\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.", /*#__PURE__*/React.createElement("br", null), "\uC0AC\uC5C5\uC18C\uBA85\xB7\uC81C\uBAA9 \uC785\uB825 \uD6C4 \uD83D\uDCBE \uC800\uC7A5\uD558\uC138\uC694.") : /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         flexDirection: "column",
-        gap: 6
+        gap: 11
       }
-    }, hist.map(function (e) {
-      var on = curHistId === e.id;
-      return /*#__PURE__*/React.createElement("div", {
-        key: e.id,
-        onClick: function () {
-          doLoadHist(e);
-        },
-        style: {
-          cursor: "pointer",
-          padding: "9px 10px",
-          borderRadius: 7,
-          border: "1px solid " + (on ? BLUE : LINE),
-          background: on ? BLUEL : "#fff",
-          position: "relative"
+    }, function () {
+      var bySite = {},
+        order = [];
+      hist.forEach(function (e) {
+        var k = e.site || "(사업소 미지정)";
+        if (!bySite[k]) {
+          bySite[k] = [];
+          order.push(k);
         }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 12.5,
-          fontWeight: 700,
-          color: on ? BLUE : INK,
-          paddingRight: 16,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap"
-        }
-      }, e.title), /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 10,
-          color: SUB,
-          marginTop: 3
-        }
-      }, e.savedAt), /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 10.5,
-          color: INK,
-          marginTop: 1,
-          fontWeight: 600
-        }
-      }, won(e.total), " \xB7 ", e.head, "\uBA85"), /*#__PURE__*/React.createElement("button", {
-        onClick: function (ev) {
-          ev.stopPropagation();
-          doDelHist(e.id);
-        },
-        title: "\uC0AD\uC81C",
-        style: {
-          position: "absolute",
-          top: 6,
-          right: 6,
-          background: "transparent",
-          border: "none",
-          color: SUB,
-          cursor: "pointer",
-          fontSize: 12,
-          lineHeight: 1
-        }
-      }, "\u2715"));
-    })))), /*#__PURE__*/React.createElement("div", {
+        bySite[k].push(e);
+      });
+      return order.map(function (sk) {
+        return /*#__PURE__*/React.createElement("div", {
+          key: sk
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 11,
+            fontWeight: 800,
+            color: BLUE,
+            background: BLUEL,
+            borderRadius: 5,
+            padding: "4px 8px",
+            marginBottom: 5
+          }
+        }, "\uD83C\uDFE2 ", sk, " ", /*#__PURE__*/React.createElement("span", {
+          style: {
+            color: SUB,
+            fontWeight: 600
+          }
+        }, "(", bySite[sk].length, ")")), /*#__PURE__*/React.createElement("div", {
+          style: {
+            display: "flex",
+            flexDirection: "column",
+            gap: 5
+          }
+        }, bySite[sk].map(function (e) {
+          var on = curHistId === e.id;
+          return /*#__PURE__*/React.createElement("div", {
+            key: e.id,
+            onClick: function () {
+              doLoadHist(e);
+            },
+            style: {
+              cursor: "pointer",
+              padding: "8px 9px",
+              borderRadius: 7,
+              border: "1px solid " + (on ? BLUE : LINE),
+              background: on ? BLUEL : "#fff",
+              position: "relative"
+            }
+          }, /*#__PURE__*/React.createElement("div", {
+            style: {
+              fontSize: 12,
+              fontWeight: 700,
+              color: on ? BLUE : INK,
+              paddingRight: 16,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap"
+            }
+          }, e.title), /*#__PURE__*/React.createElement("div", {
+            style: {
+              fontSize: 9.5,
+              color: SUB,
+              marginTop: 2
+            }
+          }, e.savedAt), /*#__PURE__*/React.createElement("div", {
+            style: {
+              fontSize: 10,
+              color: INK,
+              marginTop: 1,
+              fontWeight: 600
+            }
+          }, won(e.total), " \xB7 ", e.head, "\uBA85"), /*#__PURE__*/React.createElement("button", {
+            onClick: function (ev) {
+              ev.stopPropagation();
+              doDelHist(e.id);
+            },
+            title: "\uC0AD\uC81C",
+            style: {
+              position: "absolute",
+              top: 5,
+              right: 5,
+              background: "transparent",
+              border: "none",
+              color: SUB,
+              cursor: "pointer",
+              fontSize: 12,
+              lineHeight: 1
+            }
+          }, "\u2715"));
+        })));
+      });
+    }()))), /*#__PURE__*/React.createElement("div", {
       style: {
         flex: 1,
         minWidth: 0
@@ -1856,15 +1935,30 @@ try {
         color: BLUE,
         whiteSpace: "nowrap"
       }
-    }, "\uD83D\uDCCB \uACAC\uC801\uC11C \uC81C\uBAA9"), /*#__PURE__*/React.createElement("input", {
+    }, "\uD83D\uDCCB \uACAC\uC801\uC11C"), /*#__PURE__*/React.createElement("input", {
+      value: site,
+      onChange: function (e) {
+        setSite(e.target.value);
+      },
+      placeholder: "\uC0AC\uC5C5\uC18C\uBA85 (\uC608: \uB9C8\uACE1\uC5F0\uAD6C\uC18C)",
+      style: {
+        width: 180,
+        padding: "10px 14px",
+        borderRadius: 7,
+        border: "1px solid " + BLUE,
+        fontSize: 14,
+        fontWeight: 700,
+        color: BLUE
+      }
+    }), /*#__PURE__*/React.createElement("input", {
       value: title,
       onChange: function (e) {
         setTitle(e.target.value);
       },
-      placeholder: "\uACAC\uC801\uC11C \uC81C\uBAA9 \uC785\uB825 (\uC608: \uB9C8\uACE1\uC5F0\uAD6C\uC18C \uAC74\uBB3C\uAD00\uB9AC 2026)",
+      placeholder: "\uACAC\uC801\uC11C \uC81C\uBAA9 (\uC608: 2026 \uAC74\uBB3C\uAD00\uB9AC)",
       style: {
         flex: 1,
-        minWidth: 220,
+        minWidth: 200,
         padding: "10px 14px",
         borderRadius: 7,
         border: "1px solid " + LINE,
@@ -2069,7 +2163,20 @@ try {
           delRow(r.id);
         }
       })));
-    })))), !empty && /*#__PURE__*/React.createElement("div", {
+    })))), !empty && rows.some(function (r) {
+      return qCalcRow(r, set).belowMin;
+    }) && /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: "#fdecea",
+        border: "1px solid " + WARN,
+        color: WARN,
+        borderRadius: 6,
+        padding: "8px 12px",
+        marginTop: 10,
+        fontSize: 12,
+        fontWeight: 700
+      }
+    }, "\u26A0 \uC2DC\uAC04\uAE09\uC774 \uBC95\uC815\uCD5C\uC800\uC2DC\uAE09(", nf(set.minWage), "\uC6D0) \uBBF8\uB9CC\uC778 \uC9C1\uAD70\uC774 \uC788\uC2B5\uB2C8\uB2E4. \uBE68\uAC1B\uAC8C \uD45C\uC2DC\uB41C \uC9C1\uAD70\uC758 \uAE30\uBCF8\uAE09\uC5EC\xB7\uADFC\uBB34\uC2DC\uAC04\uC744 \uD655\uC778\uD558\uC138\uC694."), !empty && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 11,
         color: SUB,
@@ -2173,7 +2280,7 @@ try {
     }, "\uC5F0\uCC28\uC218\uB2F9 \u0192"), /*#__PURE__*/React.createElement("th", {
       style: thF2c
     }, "\uD1F4\uC9C1\uCDA9\uB2F9\uAE08 \u0192"), /*#__PURE__*/React.createElement("th", {
-      style: thF2c
+      style: thF2y
     }, "\uC18C\uACC4 \u0192"))), /*#__PURE__*/React.createElement("tbody", null, rows.map(function (r) {
       var c = qCalcRow(r, set);
       return /*#__PURE__*/React.createElement("tr", {
@@ -2197,6 +2304,10 @@ try {
         value: r.basic,
         onChange: function (v) {
           updRow(r.id, "basic", v);
+        },
+        onBlur: function () {
+          var cc = qCalcRow(r, set);
+          if (cc.belowMin) window.alert("⚠ " + (r.label || "직군") + " — 시간급 " + nf(cc.hourly) + "원이 법정최저시급 " + nf(set.minWage) + "원 미만입니다. 기본급여 또는 근무시간을 확인하세요.");
         }
       })), /*#__PURE__*/React.createElement("td", {
         style: tdF2
@@ -2273,9 +2384,7 @@ try {
       }, nf(c.annual)), /*#__PURE__*/React.createElement("td", {
         style: tdF2c
       }, nf(c.retire)), /*#__PURE__*/React.createElement("td", {
-        style: Object.assign({}, tdF2c, {
-          fontWeight: 800
-        })
+        style: tdF2y
       }, nf(c.directSum)));
     })), /*#__PURE__*/React.createElement("tfoot", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
       style: Object.assign({}, tfL, {
@@ -2285,7 +2394,7 @@ try {
       colSpan: "9",
       style: tfR
     }), /*#__PURE__*/React.createElement("td", {
-      style: Object.assign({}, tfR, {
+      style: Object.assign({}, tfY, {
         fontSize: 11
       })
     }, nf(agg.calc.reduce(function (a, c) {
@@ -2334,7 +2443,7 @@ try {
     }, "\uC7A5\uAE30\uC694\uC591"), /*#__PURE__*/React.createElement("th", {
       style: thS
     }, "\uC0AC\uC5C5\uC18C\uC138"), /*#__PURE__*/React.createElement("th", {
-      style: thS
+      style: thYel
     }, "\uC18C\uACC4"))), /*#__PURE__*/React.createElement("tbody", null, rows.map(function (r) {
       var c = qCalcRow(r, set);
       return /*#__PURE__*/React.createElement("tr", {
@@ -2355,9 +2464,7 @@ try {
       }, nf(c.care)), /*#__PURE__*/React.createElement("td", {
         style: tdS
       }, nf(c.bizTax)), /*#__PURE__*/React.createElement("td", {
-        style: Object.assign({}, tdS, {
-          fontWeight: 700
-        })
+        style: tdYel
       }, nf(c.indirectSum)));
     })), /*#__PURE__*/React.createElement("tfoot", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
       style: tfL
@@ -2365,7 +2472,7 @@ try {
       colSpan: "6",
       style: tfR
     }), /*#__PURE__*/React.createElement("td", {
-      style: tfR
+      style: tfY
     }, nf(agg.totalIndirect)))))), !empty && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 11,
@@ -2694,7 +2801,7 @@ try {
     }, "\uAC04\uC811\uC778\uAC74\uBE44"), /*#__PURE__*/React.createElement("th", {
       style: thS
     }, "\uAE30\uD0C0\uBE44\uC6A9(1\uC778)"), /*#__PURE__*/React.createElement("th", {
-      style: thS
+      style: thYel
     }, "\uC911\uACC4"))), /*#__PURE__*/React.createElement("tbody", null, rows.map(function (r, i) {
       var c = agg.calc[i];
       return /*#__PURE__*/React.createElement("tr", {
@@ -2709,9 +2816,7 @@ try {
       }, nf(c.indirectSum)), /*#__PURE__*/React.createElement("td", {
         style: tdS
       }, nf(c.etc)), /*#__PURE__*/React.createElement("td", {
-        style: Object.assign({}, tdS, {
-          fontWeight: 700
-        })
+        style: tdYel
       }, nf(c.junggye)));
     })), /*#__PURE__*/React.createElement("tfoot", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
       style: tfL
@@ -2728,7 +2833,7 @@ try {
     }, nf(agg.calc.reduce(function (a, c) {
       return a + c.etc;
     }, 0))), /*#__PURE__*/React.createElement("td", {
-      style: tfR
+      style: tfY
     }, nf(agg.calc.reduce(function (a, c) {
       return a + c.junggye;
     }, 0)))))))), /*#__PURE__*/React.createElement("div", {
@@ -2784,13 +2889,13 @@ try {
     }, "\uC77C\uBC18\uAD00\uB9AC\uBE44"), /*#__PURE__*/React.createElement("th", {
       style: thS
     }, "\uAE30\uC5C5\uC774\uC724"), /*#__PURE__*/React.createElement("th", {
-      style: thS
+      style: thYel
     }, "\uBD80\uAC00\uC138\uBCC4\uB3C4(1\uC778)"), /*#__PURE__*/React.createElement("th", {
       style: thS
     }, "\uBD80\uAC00\uC138\uD3EC\uD568(1\uC778)"), /*#__PURE__*/React.createElement("th", {
       style: thS
     }, "\uC778\uC6D0"), /*#__PURE__*/React.createElement("th", {
-      style: thS
+      style: thYel
     }, "\uD589 \uD569\uACC4(\uBD80\uAC00\uC138\uBCC4\uB3C4)"))), /*#__PURE__*/React.createElement("tbody", null, rows.map(function (r, i) {
       var c = agg.calc[i];
       return /*#__PURE__*/React.createElement("tr", {
@@ -2805,18 +2910,13 @@ try {
       }, nf(c.admin)), /*#__PURE__*/React.createElement("td", {
         style: tdS
       }, nf(c.profit)), /*#__PURE__*/React.createElement("td", {
-        style: Object.assign({}, tdS, {
-          fontWeight: 700
-        })
+        style: tdYel
       }, nf(c.exVat)), /*#__PURE__*/React.createElement("td", {
         style: tdS
       }, nf(c.inVat)), /*#__PURE__*/React.createElement("td", {
         style: tdC
       }, c.count), /*#__PURE__*/React.createElement("td", {
-        style: Object.assign({}, tdS, {
-          fontWeight: 700,
-          color: BLUE
-        })
+        style: tdYel
       }, nf(c.rowExVat)));
     })), /*#__PURE__*/React.createElement("tfoot", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
       style: tfL,
@@ -2824,14 +2924,14 @@ try {
     }, "\uD569\uACC4 (\uBD80\uAC00\uC138 \uBCC4\uB3C4)"), /*#__PURE__*/React.createElement("td", {
       style: tfR
     }, agg.totalHead), /*#__PURE__*/React.createElement("td", {
-      style: tfR
+      style: tfY
     }, nf(agg.totalExVat))), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
       style: tfL,
       colSpan: "6"
     }, "\uD569\uACC4 (\uBD80\uAC00\uC138 \uD3EC\uD568)"), /*#__PURE__*/React.createElement("td", {
       style: tfR
     }, agg.totalHead), /*#__PURE__*/React.createElement("td", {
-      style: tfR
+      style: tfY
     }, nf(agg.totalInVat)))))), !empty && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 11,
@@ -3398,7 +3498,7 @@ try {
       disabled: empty,
       onClick: function () {
         if (empty) return;
-        qExportExcel(rows, set, agg, catalog, title);
+        qExportExcel(rows, set, agg, catalog, ((site ? site + " " : "") + (title || "")).trim() || "견적서");
         doToast("견적서 엑셀이 생성되었습니다.");
       }
     }, "\u2B07 \uC5D1\uC140(.xls) \uB2E4\uC6B4\uB85C\uB4DC"))), /*#__PURE__*/React.createElement("aside", {
