@@ -153,7 +153,7 @@ function qCalcRow(r,s,catalog){
       care=r0(directBase*s.rCare/100), bizTax=r0(health*s.rBizTax/100);
   var indirectSum = pension+accident+health+employ+care+bizTax;
   /* 기타비용 — 직군 카탈로그 단가 × 수량 (1인당), 카탈로그 변경 시 자동 반영 */
-  var ar=(catalog&&(catalog[r.area]||catalog[Q_AREAS[0]]))||{gen:[],oth:[]};
+  var ar=(catalog&&(catalog[r.area]||catalog[Object.keys(catalog)[0]]))||{gen:[],oth:[]};
   var etcGenPer=(r.genItems||[]).reduce(function(a,g){return a+qUnit(ar.gen,g.nm)*(Number(g.qty)||0);},0);
   var etcOthPer=(r.othItems||[]).reduce(function(a,o){return a+qUnit(ar.oth,o.nm)*(Number(o.qty)||0);},0);
   return {baseHours:baseHours,stdHours:stdHours,common:common,hourly:hourly,ot:ot,nt:nt,annual:annual,
@@ -205,7 +205,7 @@ function qExportExcel(rows,s,agg,catalog){
   h+="<br/><table style='border-collapse:collapse;font-family:맑은 고딕;font-size:12px;'><tr><td colspan='5' style='font-weight:bold;padding:6px;'>[ 기타비용 내역 (직군별, 1인당 단가) ]</td></tr>";
   h+="<tr><th style='"+th+"'>직군</th><th style='"+th+"'>구분</th><th style='"+th+"'>항목</th><th style='"+th+"'>단가 × 수량</th><th style='"+th+"'>1인당 금액</th></tr>";
   rows.forEach(function(r){
-    var ar=(catalog&&(catalog[r.area]||catalog[Q_AREAS[0]]))||{gen:[],oth:[]};
+    var ar=(catalog&&(catalog[r.area]||catalog[Object.keys(catalog)[0]]))||{gen:[],oth:[]};
     (r.genItems||[]).forEach(function(g){ var u=qUnit(ar.gen,g.nm); h+="<tr><td style='"+tdL+"'>"+(r.label||"")+"</td><td style='"+tdL+"'>제경비</td><td style='"+tdL+"'>"+(g.nm||"")+"</td><td style='"+td+"'>"+nf(u)+" × "+(Number(g.qty)||0)+"</td><td style='"+td+"'>"+nf(u*(Number(g.qty)||0))+"</td></tr>"; });
     (r.othItems||[]).forEach(function(o){ var u=qUnit(ar.oth,o.nm); h+="<tr><td style='"+tdL+"'>"+(r.label||"")+"</td><td style='"+tdL+"'>기타경비</td><td style='"+tdL+"'>"+(o.nm||"")+"</td><td style='"+td+"'>"+nf(u)+" × "+(Number(o.qty)||0)+"</td><td style='"+td+"'>"+nf(u*(Number(o.qty)||0))+"</td></tr>"; });
   });
@@ -238,6 +238,8 @@ function QuotationPage(){
   var _cat=useState(function(){return defCatalog();}), catalog=_cat[0], setCatalog=_cat[1];
   var _scat=useState(false), showCat=_scat[0], setShowCat=_scat[1];
   var _ctab=useState("시설"), catTab=_ctab[0], setCatTab=_ctab[1];
+  var _na=useState(""), newArea=_na[0], setNewArea=_na[1];
+  var areas=Object.keys(catalog);
   var _sp=useState(0), simPct=_sp[0], setSimPct=_sp[1];
   var _t2=useState(""), simTarget2=_t2[0], setSimTarget2=_t2[1];
   var _ts=useState(null), toast=_ts[0], setToast=_ts[1];
@@ -278,6 +280,9 @@ function QuotationPage(){
   function updCat(area,type,iid,k,v){ setCatalog(function(p){var c=clone(p); c[area][type]=c[area][type].map(function(x){return x.id===iid?Object.assign({},x,mk(k,v)):x;}); return c;}); }
   function addCat(area,type){ setCatalog(function(p){var c=clone(p); c[area][type]=c[area][type].concat([{id:uid("c"),nm:"",unit:0}]); return c;}); }
   function delCat(area,type,iid){ setCatalog(function(p){var c=clone(p); c[area][type]=c[area][type].filter(function(x){return x.id!==iid;}); return c;}); }
+  /* 직군 추가/삭제 */
+  function addArea(){ var nm=(newArea||"").trim(); if(!nm){return;} if(catalog[nm]){doToast("이미 있는 직군입니다.");return;} setCatalog(function(p){var c=clone(p); c[nm]={gen:[],oth:[]}; return c;}); setCatTab(nm); setNewArea(""); doToast("직군 '"+nm+"' 추가됨"); }
+  function delArea(nm){ if(Object.keys(catalog).length<=1){doToast("최소 1개 직군은 필요합니다.");return;} setCatalog(function(p){var c=clone(p); delete c[nm]; return c;}); if(catTab===nm) setCatTab(Object.keys(catalog).filter(function(x){return x!==nm;})[0]); doToast("직군 '"+nm+"' 삭제됨"); }
   /* 설정 */
   function updSet(k,v){ setSet(function(p){return Object.assign({},p,mk(k,v));}); }
   function updDraft(k,v){ setDraft(function(p){return Object.assign({},p,mk(k,v));}); }
@@ -293,7 +298,7 @@ function QuotationPage(){
   function resetSim(){ setSimPct(0); doToast("기준(0%)으로 초기화"); }
   function applySim2(){ setRows(simRows2); setSimTarget2(""); doToast("목표금액에 맞춰 기본급여가 적용되어 ①~⑥ 전체에 반영되었습니다."); }
   function doSave(){ var id=curHistId&&hist.some(function(x){return x.id===curHistId;})?curHistId:uid("h"); var e={id:id,title:title||"제목 없음",savedAt:new Date().toLocaleString("ko-KR"),total:agg.totalExVat,head:agg.totalHead,rows:clone(rows),set:clone(set),catalog:clone(catalog)}; var nh=[e].concat(hist.filter(function(x){return x.id!==id;})); setHist(nh); saveHistLS(nh); setCurHistId(id); doToast("견적서가 저장되었습니다."); }
-  function doLoadHist(e){ var rs=(e.rows||[]).map(function(r){return Object.assign({},r,{area:(Q_AREAS.indexOf(r.area)>=0?r.area:Q_AREAS[0])});}); setRows(clone(rs)); setSet(clone(e.set||Q_DEF_SET)); setDraft(qPick(e.set||Q_DEF_SET)); if(e.catalog) setCatalog(clone(e.catalog)); setTitle(e.title||""); setCurHistId(e.id); setSimPct(0); setSimTarget2(""); doToast("저장된 견적서를 불러왔습니다."); }
+  function doLoadHist(e){ var ks=Object.keys(catalog); var rs=(e.rows||[]).map(function(r){return Object.assign({},r,{area:(ks.indexOf(r.area)>=0?r.area:ks[0])});}); setRows(clone(rs)); setSet(clone(e.set||Q_DEF_SET)); setDraft(qPick(e.set||Q_DEF_SET)); setTitle(e.title||""); setCurHistId(e.id); setSimPct(0); setSimTarget2(""); doToast("저장된 견적서를 불러왔습니다. (단가는 현재 직군별 단가 설정을 따릅니다)"); }
   function newQuote(){ setRows([]); setTitle(""); setCurHistId(null); setSimPct(0); doToast("새 견적서를 시작합니다."); }
   function doDelHist(id){ var nh=hist.filter(function(x){return x.id!==id;}); setHist(nh); saveHistLS(nh); if(curHistId===id) setCurHistId(null); doToast("삭제되었습니다."); }
 
@@ -358,7 +363,7 @@ function QuotationPage(){
             var c=qCalcRow(r,set);
             return <tr key={r.id}>
               <td style={tdL}><TxtInput w={130} value={r.label} ph="직군명 입력" onChange={function(v){updRow(r.id,"label",v);}} /></td>
-              <td style={tdC}><select value={r.area} onChange={function(e){updRow(r.id,"area",e.target.value);}} style={{padding:"6px 6px",borderRadius:5,border:"1px solid "+LINE,fontSize:12.5}}>{Q_AREAS.map(function(a){return <option key={a} value={a}>{a}</option>;})}</select></td>
+              <td style={tdC}><select value={r.area} onChange={function(e){updRow(r.id,"area",e.target.value);}} style={{padding:"6px 6px",borderRadius:5,border:"1px solid "+LINE,fontSize:12.5}}>{areas.map(function(a){return <option key={a} value={a}>{a}</option>;})}</select></td>
               <td style={tdC}><select value={r.workType} onChange={function(e){setWorkType(r.id,e.target.value);}} style={{padding:"6px 6px",borderRadius:5,border:"1px solid "+LINE,fontSize:12.5}}><option value="week">주간직</option><option value="shift">교대직</option></select></td>
               <td style={tdS}><NumInput w={54} value={r.count} onChange={function(v){updRow(r.id,"count",v);}} /></td>
               <td style={tdS}><NumInput w={66} value={r.baseHours} onChange={function(v){updRow(r.id,"baseHours",v);}} /></td>
@@ -441,7 +446,7 @@ function QuotationPage(){
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}><span style={{fontSize:12,fontWeight:700,color:INK}}>제경비 (1인당)</span><button style={bSm} onClick={function(){addGenItem(r.id);}}>+ 행 추가</button></div>
                   <table style={stbl}><thead><tr><th style={Object.assign({},thL,{fontSize:10.5})}>종류</th><th style={Object.assign({},thS,{fontSize:10.5})}>단가(자동)</th><th style={Object.assign({},thS,{fontSize:10.5})}>수량</th><th style={Object.assign({},thS,{fontSize:10.5})}>금액</th><th style={thC}></th></tr></thead>
                     <tbody>{r.genItems.map(function(g){
-                      var arc=catalog[r.area]||catalog[Q_AREAS[0]]||{gen:[],oth:[]}; var cg=arc.gen||[];
+                      var arc=catalog[r.area]||catalog[Object.keys(catalog)[0]]||{gen:[],oth:[]}; var cg=arc.gen||[];
                       var gu=qUnit(cg,g.nm);
                       return <tr key={g.id}>
                         <td style={tdL}><select value={g.nm} onChange={function(e){selGenItem(r.id,g.id,e.target.value);}} style={{width:118,padding:"6px",borderRadius:5,border:"1px solid "+LINE,fontSize:12}}><option value="">종류 선택</option>{cg.map(function(x){return <option key={x.id} value={x.nm}>{x.nm}</option>;})}</select></td>
@@ -458,7 +463,7 @@ function QuotationPage(){
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}><span style={{fontSize:12,fontWeight:700,color:INK}}>기타경비 (1인당)</span><button style={bSm} onClick={function(){addOthItem(r.id);}}>+ 행 추가</button></div>
                   <table style={stbl}><thead><tr><th style={Object.assign({},thL,{fontSize:10.5})}>종류</th><th style={Object.assign({},thS,{fontSize:10.5})}>단가(자동)</th><th style={Object.assign({},thS,{fontSize:10.5})}>수량</th><th style={Object.assign({},thS,{fontSize:10.5})}>금액</th><th style={thC}></th></tr></thead>
                     <tbody>{r.othItems.map(function(o){
-                      var arc2=catalog[r.area]||catalog[Q_AREAS[0]]||{gen:[],oth:[]}; var co=arc2.oth||[];
+                      var arc2=catalog[r.area]||catalog[Object.keys(catalog)[0]]||{gen:[],oth:[]}; var co=arc2.oth||[];
                       var ou=qUnit(co,o.nm);
                       return <tr key={o.id}>
                         <td style={tdL}><select value={o.nm} onChange={function(e){selOthItem(r.id,o.id,e.target.value);}} style={{width:118,padding:"6px",borderRadius:5,border:"1px solid "+LINE,fontSize:12}}><option value="">종류 선택</option>{co.map(function(x){return <option key={x.id} value={x.nm}>{x.nm}</option>;})}</select></td>
@@ -681,8 +686,10 @@ function QuotationPage(){
             <button onClick={function(){setShowCat(false);}} style={{background:"#f1f5f4",border:"none",cursor:"pointer",padding:"6px 11px",borderRadius:7,fontSize:15}}>✕</button>
           </div>
           <div style={{fontSize:11.5,color:SUB,marginBottom:14}}>직군 구분별로 제경비·기타경비 종류와 단가를 등록하세요. 입력 페이지에서 종류를 선택하면 이 단가가 자동으로 적용됩니다.</div>
-          <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
-            {Q_AREAS.map(function(a){var on=catTab===a;return <button key={a} onClick={function(){setCatTab(a);}} style={{padding:"7px 16px",borderRadius:7,border:"1px solid "+(on?BLUE:LINE),cursor:"pointer",fontSize:13,fontWeight:on?700:500,background:on?BLUE:"#fff",color:on?"#fff":INK}}>{a}</button>;})}
+          <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+            {areas.map(function(a){var on=catTab===a;return <span key={a} style={{display:"inline-flex",alignItems:"center",border:"1px solid "+(on?BLUE:LINE),borderRadius:7,background:on?BLUE:"#fff",overflow:"hidden"}}><button onClick={function(){setCatTab(a);}} style={{padding:"7px 12px",border:"none",cursor:"pointer",fontSize:13,fontWeight:on?700:500,background:"transparent",color:on?"#fff":INK}}>{a}</button>{areas.length>1&&<button onClick={function(){if(confirm("'"+a+"' 직군을 삭제할까요?"))delArea(a);}} title="직군 삭제" style={{padding:"7px 8px 7px 0",border:"none",cursor:"pointer",fontSize:11,background:"transparent",color:on?"#cfe0f0":SUB}}>✕</button>}</span>;})}
+            <input value={newArea} onChange={function(e){setNewArea(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter")addArea();}} placeholder="새 직군명" style={{width:96,padding:"7px 9px",borderRadius:7,border:"1px solid "+LINE,fontSize:12.5}} />
+            <button style={bSm} onClick={addArea}>+ 직군 추가</button>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
             {[["gen","제경비"],["oth","기타경비"]].map(function(tp){
