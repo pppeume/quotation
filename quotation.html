@@ -141,7 +141,7 @@ function qCalcRow(r,s,catalog){
   var basic=Number(r.basic)||0, pos=Number(r.posPay)||0, qual=Number(r.qualPay)||0;
   var common = r0((basic+pos)/baseHours);                       /* 통상시급 = ROUND((기본급여+직책수당)/기본시간,0) */
   var hourly = r0(basic/baseHours);                             /* 시간급 = ROUND(기본급여/기본근로시간) */
-  var ot = r.otApply ? r10((Number(r.otHours)||0)*common*1.5) : 0;
+  var ot = r.otApply ? r10(common*stdHours*(Number(r.otHours)||0)/12) : 0;  /* 연장 = ROUND((통상시급×소정근로시간)×연장시간/12, -1) */
   var nt = r.ntApply ? r10((Number(r.ntHours)||0)*common*0.5) : 0;
   var annual = r10(stdHours*common*(Number(r.annualDays)||0)/12);
   var directBase = basic+pos+qual+ot+nt+annual;
@@ -403,7 +403,7 @@ function QuotationPage(){
           })}</tbody>
           <tfoot><tr><td style={tfL}>합계</td><td colSpan="9" style={tfR}></td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.directSum*c.count;},0))}</td></tr></tfoot>
         </table></div>}
-        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.7}}>🔹 연장 = ROUND(연장시간×통상시급×1.5, -1)　🔹 야간 = ROUND(야간시간×통상시급×0.5, -1)　🔹 연차 = ROUND(소정근로시간×통상시급×연차일÷12, -1)　🔹 퇴직충당금 = ROUND(소계(기본급여~연차수당)÷12, -1)</div>}
+        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.7}}>🔹 연장 = ROUND((통상시급×소정근로시간)×연장시간÷12, -1)　🔹 야간 = ROUND(야간시간×통상시급×0.5, -1)　🔹 연차 = ROUND(소정근로시간×통상시급×연차일÷12, -1)　🔹 퇴직충당금 = ROUND(소계(기본급여~연차수당)÷12, -1)</div>}
       </div>
 
       {/* 3. 간접인건비 */}
