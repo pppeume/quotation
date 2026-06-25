@@ -352,6 +352,9 @@ try {
   function r10(n) {
     return Math.round((Number(n) || 0) / 10) * 10;
   } /* ROUND(x,-1) */
+  function r1000(n) {
+    return Math.round((Number(n) || 0) / 1000) * 1000;
+  } /* ROUND(x,-3) */
   function r0(n) {
     return Math.round(Number(n) || 0);
   } /* ROUND(x,0) */
@@ -823,7 +826,7 @@ try {
       c.junggye = c.directSum + c.indirectSum + c.etc; /* 중계 = 직접+간접+기타 */
       c.admin = r0(c.junggye * s.adminRate / 100); /* 일반관리비 */
       c.profit = r0((c.junggye + c.admin) * s.profitRate / 100); /* 기업이윤 */
-      c.exVat = c.junggye + c.admin + c.profit; /* 부가세별도 (1인) */
+      c.exVat = r1000(c.junggye + c.admin + c.profit); /* 부가세별도 (1인) = ROUND(중계+관리비+이윤, -3) */
       c.inVat = r0(c.exVat * (1 + s.vat / 100)); /* 부가세포함 (1인) */
       c.rowExVat = c.exVat * cnt;
       c.rowInVat = c.inVat * cnt;
@@ -2658,18 +2661,22 @@ try {
       }, nf(c.junggye)));
     })), /*#__PURE__*/React.createElement("tfoot", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
       style: tfL
-    }, "\uD569\uACC4"), /*#__PURE__*/React.createElement("td", {
+    }, "\uD569\uACC4 (1\uC778 \uB2E8\uAC00 \uD569)"), /*#__PURE__*/React.createElement("td", {
       style: tfR
     }, nf(agg.calc.reduce(function (a, c) {
-      return a + c.directSum * c.count;
+      return a + c.directSum;
     }, 0))), /*#__PURE__*/React.createElement("td", {
       style: tfR
-    }, nf(agg.totalIndirect)), /*#__PURE__*/React.createElement("td", {
-      style: tfR
-    }, nf(agg.etcTotal)), /*#__PURE__*/React.createElement("td", {
+    }, nf(agg.calc.reduce(function (a, c) {
+      return a + c.indirectSum;
+    }, 0))), /*#__PURE__*/React.createElement("td", {
       style: tfR
     }, nf(agg.calc.reduce(function (a, c) {
-      return a + c.junggye * c.count;
+      return a + c.etc;
+    }, 0))), /*#__PURE__*/React.createElement("td", {
+      style: tfR
+    }, nf(agg.calc.reduce(function (a, c) {
+      return a + c.junggye;
     }, 0)))))))), /*#__PURE__*/React.createElement("div", {
       style: card
     }, /*#__PURE__*/React.createElement("div", {
