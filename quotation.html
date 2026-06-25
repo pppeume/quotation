@@ -130,6 +130,7 @@ function qCalcRow(r,s){
   var stdHours = Number(r.stdHours)||s.stdHours;
   var basic=Number(r.basic)||0, pos=Number(r.posPay)||0, qual=Number(r.qualPay)||0;
   var common = r0((basic+pos)/baseHours);                       /* 통상시급 = ROUND((기본급여+직책수당)/기본시간,0) */
+  var hourly = r0(basic/baseHours);                             /* 시간급 = ROUND(기본급여/기본근로시간) */
   var ot = r.otApply ? r10((Number(r.otHours)||0)*common*1.5) : 0;
   var nt = r.ntApply ? r10((Number(r.ntHours)||0)*common*0.5) : 0;
   var annual = r10(stdHours*common*(Number(r.annualDays)||0)/12);
@@ -143,7 +144,7 @@ function qCalcRow(r,s){
   var indirectSum = pension+accident+health+employ+care+bizTax;
   return {baseHours:baseHours,stdHours:stdHours,common:common,ot:ot,nt:nt,annual:annual,directBase:directBase,
     retire:retire,directSum:directSum,monthlyPay:monthlyPay,pension:pension,accident:accident,health:health,
-    employ:employ,care:care,bizTax:bizTax,indirectSum:indirectSum,belowMin:(Number(r.hourly)||0)<s.minWage};
+    employ:employ,care:care,bizTax:bizTax,indirectSum:indirectSum,hourly:hourly,belowMin:hourly<s.minWage};
 }
 
 function qCalcAll(rows,gen,oth,s){
@@ -302,13 +303,13 @@ function QuotationPage(){
               <td style={tdS}><NumInput w={54} value={r.count} onChange={function(v){updRow(r.id,"count",v);}} /></td>
               <td style={tdS}><NumInput w={66} value={r.baseHours} onChange={function(v){updRow(r.id,"baseHours",v);}} /></td>
               <td style={tdS}><NumInput w={54} value={r.stdHours} onChange={function(v){updRow(r.id,"stdHours",v);}} /></td>
-              <td style={tdS}><NumInput w={78} value={r.hourly} warn={c.belowMin} onChange={function(v){updRow(r.id,"hourly",v);}} />{c.belowMin&&<div style={{fontSize:9.5,color:WARN,marginTop:2}}>최저시급 미만</div>}</td>
+              <td style={Object.assign({},tdS,{fontWeight:600,color:c.belowMin?WARN:INK})}>{nf(c.hourly)}{c.belowMin&&<div style={{fontSize:9.5,color:WARN,marginTop:2}}>최저시급 미만</div>}</td>
               <td style={Object.assign({},tdS,{fontWeight:700})}>{nf(c.common)}</td>
               <td style={tdC}><DelBtn onClick={function(){delRow(r.id);}} /></td>
             </tr>;
           })}</tbody>
         </table></div>
-        <div style={{fontSize:11,color:SUB,marginTop:8}}>· 기본근로시간: 주간직 {set.weekHours} / 교대직 {set.shiftHours} (근무형태 선택 시 자동 입력, 수정 가능) · 통상시급 = ROUND((기본급여+직책수당) ÷ 기본근로시간)</div>
+        <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.6}}>· 기본근로시간: 주간직 {set.weekHours} / 교대직 {set.shiftHours} (근무형태 선택 시 자동 입력, 수정 가능)<br/>· <b style={{color:INK}}>시간급</b> = ROUND(기본급여 ÷ 기본근로시간) · <b style={{color:INK}}>통상시급</b> = ROUND((기본급여+직책수당) ÷ 기본근로시간) → 둘 다 <b style={{color:BLUE}}>②직접인건비의 기본급여</b>를 입력하면 자동 계산됩니다.</div>
       </div>
 
       {/* 2. 직접인건비 */}
