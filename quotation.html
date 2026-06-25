@@ -108,6 +108,9 @@ var Q_DEF_SET={ weekHours:209, shiftHours:213, stdHours:9, minWage:10320,
   adminRate:5.0, profitRate:10.0, vat:10.0 };
 var Q_PANEL_KEYS=["weekHours","shiftHours","stdHours","minWage","rPension","rAccident","rHealth","rEmploy","rCare","rBizTax","vat"];
 function qPick(o){ var r={}; Q_PANEL_KEYS.forEach(function(k){ r[k]=o[k]; }); return r; }
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function loadHist(){ try{ return JSON.parse((window.localStorage&&localStorage.getItem("quotation_history"))||"[]"); }catch(e){ return []; } }
+function saveHistLS(h){ try{ if(window.localStorage) localStorage.setItem("quotation_history",JSON.stringify(h)); }catch(e){} }
 
 /* 새 인원(직군) 행 — 인원 추가 시 제경비·기타경비 1줄씩 자동 생성 */
 function newRow(s){
@@ -205,28 +208,20 @@ function QuotationPage(){
   var _s=useState(Q_DEF_SET), set=_s[0], setSet=_s[1];
   var _ds=useState(function(){return qPick(Q_DEF_SET);}), draft=_ds[0], setDraft=_ds[1];
   var _r=useState([]), rows=_r[0], setRows=_r[1];
-  var _tg=useState(null), target=_tg[0], setTarget=_tg[1];
-  var _cf=useState(null), confirmed=_cf[0], setConfirmed=_cf[1];
+  var _sp=useState(0), simPct=_sp[0], setSimPct=_sp[1];
   var _ts=useState(null), toast=_ts[0], setToast=_ts[1];
+  var _ti=useState(""), title=_ti[0], setTitle=_ti[1];
+  var _hi=useState(function(){return loadHist();}), hist=_hi[0], setHist=_hi[1];
+  var _shh=useState(false), showHist=_shh[0], setShowHist=_shh[1];
   function doToast(m){ setToast(m); setTimeout(function(){setToast(null);},2500); }
   function mk(k,v){var o={};o[k]=v;return o;}
 
   var agg=useMemo(function(){return qCalcAll(rows,set);},[rows,set]);
   var empty=rows.length===0;
-  var baseTotal=agg.totalExVat;
-  var simTarget=target==null?baseTotal:target;
-  var simMin=Math.round(baseTotal*0.5), simMax=Math.round(baseTotal*1.5);
-
-  var sim=useMemo(function(){
-    var fixed=agg.totalIndirect, adjustable=baseTotal-fixed;
-    var factor=adjustable>0?(simTarget-fixed)/adjustable:1; if(factor<0)factor=0;
-    var perRow=agg.calc.map(function(c,i){
-      var newUnit=c.indirectSum+(c.exVat-c.indirectSum)*factor;
-      return {id:rows[i].id,label:rows[i].label,count:c.count,oldUnit:c.exVat,newUnit:Math.round(newUnit),oldRow:c.rowExVat,newRow:Math.round(newUnit)*c.count,indirect:c.indirectSum};
-    });
-    var newTotal=perRow.reduce(function(a,p){return a+p.newRow;},0);
-    return {factor:factor,perRow:perRow,newTotal:newTotal,fixed:fixed};
-  },[agg,simTarget,baseTotal,rows]);
+  /* 시뮬레이션: 기본급여를 simPct(%) 만큼 조정 → 전체 재계산 */
+  var simFactor=1+simPct/100;
+  var simRows=useMemo(function(){return rows.map(function(r){return Object.assign({},r,{basic:r0((Number(r.basic)||0)*simFactor)});});},[rows,simFactor]);
+  var simAgg=useMemo(function(){return qCalcAll(simRows,set);},[simRows,set]);
 
   /* 인원 행 */
   function updRow(id,k,v){ setRows(function(p){return p.map(function(r){return r.id===id?Object.assign({},r,mk(k,v)):r;});}); }
@@ -252,8 +247,11 @@ function QuotationPage(){
   function resetDraft(){ setDraft(qPick(set)); doToast("설정 입력을 되돌렸습니다."); }
   var setDirty=Q_PANEL_KEYS.some(function(k){ return String(draft[k])!==String(set[k]); });
 
-  function confirmSim(){ var m={}; sim.perRow.forEach(function(p){m[p.id]=p.newUnit;}); setConfirmed(m); doToast("조정 단가가 확정되었습니다. 엑셀에 반영됩니다."); }
-  function resetSim(){ setTarget(null); setConfirmed(null); doToast("기준 단가로 초기화"); }
+  function applySim(){ setRows(simRows); setSimPct(0); doToast("조정된 기본급여가 적용되어 ①~⑥ 전체에 반영되었습니다."); }
+  function resetSim(){ setSimPct(0); doToast("기준(0%)으로 초기화"); }
+  function doSave(){ var e={id:uid("h"),title:title||"제목 없음",savedAt:new Date().toLocaleString("ko-KR"),total:agg.totalExVat,head:agg.totalHead,rows:clone(rows),set:clone(set)}; var nh=[e].concat(hist); setHist(nh); saveHistLS(nh); doToast("견적서가 저장되었습니다."); }
+  function doLoadHist(e){ setRows(clone(e.rows||[])); setSet(clone(e.set||Q_DEF_SET)); setDraft(qPick(e.set||Q_DEF_SET)); setTitle(e.title||""); setSimPct(0); setShowHist(false); doToast("저장된 견적서를 불러왔습니다."); }
+  function doDelHist(id){ var nh=hist.filter(function(x){return x.id!==id;}); setHist(nh); saveHistLS(nh); doToast("삭제되었습니다."); }
 
   var sumCard={background:"#fff",border:"1px solid "+LINE,borderRadius:8,padding:"14px 16px"};
   var sumLbl={fontSize:11.5,color:SUB,marginBottom:5};
@@ -266,6 +264,13 @@ function QuotationPage(){
   return (
     <div style={{display:"flex",gap:16,alignItems:"flex-start"}}>
     <div style={{flex:1,minWidth:0}}>
+      {/* 견적서 제목 · 히스토리 */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+        <span style={{fontSize:13,fontWeight:700,color:BLUE,whiteSpace:"nowrap"}}>📋 견적서</span>
+        <input value={title} onChange={function(e){setTitle(e.target.value);}} placeholder="견적서 제목 입력 (예: 마곡연구소 건물관리 2026)" style={{flex:1,minWidth:220,padding:"10px 14px",borderRadius:7,border:"1px solid "+LINE,fontSize:14.5,fontWeight:700,color:INK}} />
+        <button style={bDef} onClick={doSave}>💾 저장</button>
+        <button style={Object.assign({},bSm,{padding:"8px 14px"})} onClick={function(){setShowHist(true);}}>🕘 히스토리 ({hist.length})</button>
+      </div>
       {/* 상단 요약 */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
         <div style={sumCard}><div style={sumLbl}>총 인원</div><div style={Object.assign({},sumVal,{color:INK})}>{agg.totalHead}<span style={{fontSize:13,fontWeight:400,color:SUB}}> 명</span></div></div>
@@ -300,7 +305,7 @@ function QuotationPage(){
             </tr>;
           })}</tbody>
         </table></div>}
-        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.6}}>· 기본근로시간: 주간직 {set.weekHours} / 교대직 {set.shiftHours} (근무형태 선택 시 자동 입력, 수정 가능)<br/>· <b style={{color:INK}}>시간급</b> = ROUND(기본급여 ÷ 기본근로시간) · <b style={{color:INK}}>통상시급</b> = ROUND((기본급여+직책수당) ÷ 기본근로시간) → <b style={{color:BLUE}}>②기본급여</b> 입력 시 자동 계산</div>}
+        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.7}}>🔹 기본근로시간: 주간직 {set.weekHours} / 교대직 {set.shiftHours} (근무형태 선택 시 자동 입력, 수정 가능)<br/>🔹 <b style={{color:INK}}>시간급</b> = ROUND(기본급여 ÷ 기본근로시간)<br/>🔹 <b style={{color:INK}}>통상시급</b> = ROUND((기본급여+직책수당) ÷ 기본근로시간) → <b style={{color:BLUE}}>②기본급여</b> 입력 시 자동 계산</div>}
       </div>
 
       {/* 2. 직접인건비 */}
@@ -329,7 +334,7 @@ function QuotationPage(){
           })}</tbody>
           <tfoot><tr><td style={tfL}>합계</td><td colSpan="9" style={tfR}></td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.directSum*c.count;},0))}</td></tr></tfoot>
         </table></div>}
-        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8}}>· 연장 = ROUND(연장시간×통상시급×1.5, -1) · 야간 = ROUND(야간시간×통상시급×0.5, -1) · 연차 = ROUND(소정근로시간×통상시급×연차일÷12, -1) · 퇴직충당금 = ROUND(소계(기본급여~연차수당)÷12, -1)</div>}
+        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.7}}>🔹 연장 = ROUND(연장시간×통상시급×1.5, -1)　🔹 야간 = ROUND(야간시간×통상시급×0.5, -1)　🔹 연차 = ROUND(소정근로시간×통상시급×연차일÷12, -1)　🔹 퇴직충당금 = ROUND(소계(기본급여~연차수당)÷12, -1)</div>}
       </div>
 
       {/* 3. 간접인건비 */}
@@ -351,7 +356,7 @@ function QuotationPage(){
           })}</tbody>
           <tfoot><tr><td style={tfL}>합계</td><td colSpan="6" style={tfR}></td><td style={tfR}>{nf(agg.totalIndirect)}</td></tr></tfoot>
         </table></div>}
-        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8}}>· 기준: 기본급여~연차수당 합 (퇴직충당금 제외) · 요율: 국민연금 {set.rPension}% / 산재 {set.rAccident}% / 건강 {set.rHealth}% / 고용 {set.rEmploy}% / 장기요양 {set.rCare}% · 사업소세 = 건강보험 × {set.rBizTax}% (요율은 ⚙ 설정에서 관리)</div>}
+        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.7}}>🔹 기준: 기본급여~연차수당 합 (퇴직충당금 제외)<br/>🔹 요율: 국민연금 {set.rPension}% / 산재 {set.rAccident}% / 건강 {set.rHealth}% / 고용 {set.rEmploy}% / 장기요양 {set.rCare}%　🔹 사업소세 = 건강보험 × {set.rBizTax}% (요율은 ⚙ 설정에서 관리)</div>}
       </div>
 
       {/* 4. 기타 비용 (직군별 개별 입력) */}
@@ -442,47 +447,62 @@ function QuotationPage(){
             <tr><td style={tfL} colSpan="6">합계 (부가세 포함)</td><td style={tfR}>{agg.totalHead}</td><td style={tfR}>{nf(agg.totalInVat)}</td></tr>
           </tfoot>
         </table></div>}
-        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8}}>· 일반관리비 = 중계 × {set.adminRate}% (인원별) · 기업이윤 = (중계 + 일반관리비) × {set.profitRate}% (인원별) · 부가세포함 = 부가세별도 × {(100+Number(set.vat)).toFixed(0)}%</div>}
+        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.7}}>🔹 일반관리비 = 중계 × {set.adminRate}% (인원별)　🔹 기업이윤 = (중계 + 일반관리비) × {set.profitRate}% (인원별)　🔹 부가세포함 = 부가세별도 × {(100+Number(set.vat)).toFixed(0)}%</div>}
       </div>
 
-      {/* 시뮬레이션 */}
+      {/* 시뮬레이션 — 기본급여 ±50% 조정 */}
       {!empty && <div style={Object.assign({},card,{borderTop:"3px solid "+BLUE})}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-          <span style={secTt}>견적 시뮬레이션 (±50%)</span>
-          <span style={{fontSize:12,color:SUB}}>간접인건비 {won(agg.totalIndirect)} 는 조정 불가</span>
+          <span style={secTt}>견적 시뮬레이션 (기본급여 ±50% 조정)</span>
+          <span style={{fontSize:12,color:SUB}}>조정 = 기본급여 변경 · 적용 시 ①~⑥ 전체 반영</span>
         </div>
-        <div style={{fontSize:11.5,color:SUB,marginBottom:14}}>총 견적금액을 ±50% 범위에서 조정하면 각 인원별 단가가 자동 제안됩니다. 담당자 판단 후 확정하세요.</div>
-        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:6}}>
-          <input type="range" min={simMin} max={simMax} step={Math.max(1,Math.round((simMax-simMin)/200))} value={Math.min(simMax,Math.max(simMin,simTarget))} onChange={function(e){setTarget(Number(e.target.value));}} style={{flex:1,accentColor:BLUE}} />
-          <div style={{textAlign:"right",minWidth:230}}>
-            <div style={{fontSize:11,color:SUB}}>목표 견적금액 (부가세 별도)</div>
-            <div style={{fontSize:21,fontWeight:800,color:BLUE}}>{won(simTarget)}</div>
-            <div style={{fontSize:11,color:simTarget>=baseTotal?BLUE:WARN,fontWeight:600}}>{simTarget>=baseTotal?"+":""}{baseTotal>0?((simTarget/baseTotal-1)*100).toFixed(1):0}% vs 기준 {won(baseTotal)}</div>
-          </div>
+        <div style={{fontSize:11.5,color:SUB,marginBottom:16}}>아래 버튼이나 슬라이더로 기본급여를 ±50% 범위에서 조정하세요. 가운데(0%)가 현재 기준입니다. 조정에 따라 직접·간접인건비·이윤·총 견적금액이 함께 바뀝니다.</div>
+
+        <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:14,flexWrap:"wrap"}}>
+          {[-50,-25,-10,-5,0,5,10,25,50].map(function(p){
+            var on=simPct===p;
+            return <button key={p} onClick={function(){setSimPct(p);}} style={{padding:"7px 14px",borderRadius:20,border:"1px solid "+(on?BLUE:(p===0?BLUE:LINE)),cursor:"pointer",fontSize:12.5,fontWeight:on||p===0?700:500,background:on?BLUE:(p===0?BLUEL:"#fff"),color:on?"#fff":(p===0?BLUE:INK)}}>{p===0?"기준 0%":(p>0?"+"+p+"%":p+"%")}</button>;
+          })}
         </div>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:SUB,marginBottom:14}}><span>-50% ({won(simMin)})</span><span>기준</span><span>+50% ({won(simMax)})</span></div>
-        <div style={{background:"#f7f9fb",border:"1px solid "+LINE,borderRadius:6,padding:14,marginBottom:12}}>
-          <div style={{fontSize:12.5,fontWeight:700,marginBottom:10,color:INK}}>인원별 조정 단가 제안</div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {sim.perRow.map(function(p){
-              var diff=p.newUnit-p.oldUnit;
-              return <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,fontSize:12.5,padding:"8px 12px",background:"#fff",borderRadius:6,border:"1px solid "+LINE}}>
-                <span style={{fontWeight:600,minWidth:140}}>{p.label||"(직군명)"} <span style={{color:SUB}}>({p.count}명)</span></span>
-                <span style={{color:SUB}}>1인당 {won(p.oldUnit)}</span><span style={{color:"#9aa4b0"}}>→</span>
-                <span style={{fontWeight:700,color:BLUE}}>{won(p.newUnit)}</span>
-                <span style={{fontSize:11,color:diff>=0?BLUE:WARN}}>({diff>=0?"+":""}{nf(diff)})</span>
-                <span style={{marginLeft:"auto",color:INK}}>행 합계 {won(p.newRow)}</span>
-              </div>;
-            })}
-          </div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12,paddingTop:12,borderTop:"1px solid "+LINE}}>
-            <span style={{fontSize:13,fontWeight:700}}>조정 후 합계 (부가세 별도)</span>
-            <span style={{fontSize:17,fontWeight:800,color:BLUE}}>{won(sim.newTotal)}</span>
-          </div>
+
+        <div style={{position:"relative",padding:"0 2px",marginBottom:4}}>
+          <input type="range" min={-50} max={50} step={1} value={simPct} onChange={function(e){setSimPct(Number(e.target.value));}} style={{width:"100%",accentColor:BLUE}} />
+          <div style={{position:"absolute",left:"50%",top:-3,transform:"translateX(-50%)",width:2,height:20,background:BLUE,opacity:.45,pointerEvents:"none"}} />
         </div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-          <button style={bDef} onClick={resetSim}>기준값으로 초기화</button>
-          <button style={bPri} onClick={confirmSim}>이 단가로 확정</button>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:SUB,marginBottom:16}}><span>-50%</span><span style={{color:BLUE,fontWeight:700}}>▲ 기준 0%</span><span>+50%</span></div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16}}>
+          <div style={sumCard}><div style={sumLbl}>기본급여 조정율</div><div style={Object.assign({},sumVal,{color:simPct>=0?BLUE:WARN})}>{simPct>0?"+":""}{simPct}%</div></div>
+          <div style={sumCard}><div style={sumLbl}>조정 전 총견적 (부가세 별도)</div><div style={Object.assign({},sumVal,{color:INK,fontSize:17})}>{won(agg.totalExVat)}</div></div>
+          <div style={sumCard}><div style={sumLbl}>조정 후 총견적 (부가세 별도)</div><div style={Object.assign({},sumVal,{fontSize:17})}>{won(simAgg.totalExVat)}</div><div style={{fontSize:11,fontWeight:600,color:simAgg.totalExVat>=agg.totalExVat?BLUE:WARN,marginTop:3}}>{simAgg.totalExVat>=agg.totalExVat?"+":""}{nf(simAgg.totalExVat-agg.totalExVat)}원 ({agg.totalExVat>0?((simAgg.totalExVat/agg.totalExVat-1)*100).toFixed(1):0}%)</div></div>
+        </div>
+
+        <div style={{fontSize:12.5,fontWeight:700,color:INK,marginBottom:9}}>조정 전 → 조정 후 상세 비교</div>
+        <div style={tableWrap}><table style={tbl}>
+          <thead><tr>
+            <th style={thL}>직군</th><th style={thC}>구분</th><th style={thS}>기본급여</th><th style={thS}>직접인건비</th><th style={thS}>간접인건비</th><th style={thS}>기타비용</th><th style={thS}>관리비+이윤</th><th style={thS}>부가세별도(1인)</th><th style={thS}>행 합계(부가세별도)</th>
+          </tr></thead>
+          <tbody>{rows.map(function(r,i){
+            var b=agg.calc[i], a=simAgg.calc[i];
+            var pb=b.admin+b.profit, pa=a.admin+a.profit;
+            return [
+              <tr key={r.id+"_b"}><td rowSpan="2" style={Object.assign({},tdL,{fontWeight:600,position:"sticky",left:0,background:"#fff",borderRight:"1px solid "+LINE})}>{r.label||<span style={{color:SUB,fontWeight:400}}>(직군명)</span>} <span style={{color:SUB,fontWeight:400}}>×{r.count}</span></td>
+                <td style={Object.assign({},tdC,{color:SUB})}>전</td>
+                <td style={Object.assign({},tdS,{color:SUB})}>{nf(Number(r.basic)||0)}</td><td style={Object.assign({},tdS,{color:SUB})}>{nf(b.directSum)}</td><td style={Object.assign({},tdS,{color:SUB})}>{nf(b.indirectSum)}</td><td style={Object.assign({},tdS,{color:SUB})}>{nf(b.etc)}</td><td style={Object.assign({},tdS,{color:SUB})}>{nf(pb)}</td><td style={Object.assign({},tdS,{color:SUB})}>{nf(b.exVat)}</td><td style={Object.assign({},tdS,{color:SUB})}>{nf(b.rowExVat)}</td></tr>,
+              <tr key={r.id+"_a"}>
+                <td style={Object.assign({},tdC,{fontWeight:700,color:BLUE})}>후</td>
+                <td style={Object.assign({},tdS,{fontWeight:700})}>{nf(simRows[i].basic)}</td><td style={Object.assign({},tdS,{fontWeight:700})}>{nf(a.directSum)}</td><td style={Object.assign({},tdS,{fontWeight:700})}>{nf(a.indirectSum)}</td><td style={Object.assign({},tdS,{fontWeight:700})}>{nf(a.etc)}</td><td style={Object.assign({},tdS,{fontWeight:700})}>{nf(pa)}</td><td style={Object.assign({},tdS,{fontWeight:700})}>{nf(a.exVat)}</td><td style={Object.assign({},tdS,{fontWeight:700,color:BLUE})}>{nf(a.rowExVat)}</td></tr>
+            ];
+          })}</tbody>
+          <tfoot>
+            <tr><td style={tfL} colSpan="8">조정 전 총 합계 (부가세 별도)</td><td style={Object.assign({},tfR,{color:SUB})}>{nf(agg.totalExVat)}</td></tr>
+            <tr><td style={tfL} colSpan="8">조정 후 총 합계 (부가세 별도)</td><td style={tfR}>{nf(simAgg.totalExVat)}</td></tr>
+          </tfoot>
+        </table></div>
+
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
+          <button style={bDef} onClick={resetSim}>기준(0%)으로</button>
+          <button style={Object.assign({},bPri,{opacity:simPct===0?0.5:1})} onClick={function(){if(simPct!==0)applySim();}}>✓ 적용 (①~⑥에 반영)</button>
         </div>
       </div>}
 
@@ -490,9 +510,9 @@ function QuotationPage(){
       <div style={Object.assign({},card,{display:"flex",justifyContent:"space-between",alignItems:"center"})}>
         <div>
           <div style={{fontSize:13.5,fontWeight:700,color:INK}}>견적서 엑셀 다운로드</div>
-          <div style={{fontSize:11.5,color:SUB,marginTop:3}}>{empty?"① 인원을 추가한 뒤 다운로드할 수 있습니다.":(confirmed?"확정된 조정 단가로 출력됩니다.":"현재 산출된 기준 단가로 출력됩니다. (시뮬레이션 확정 시 조정 단가 반영)")}</div>
+          <div style={{fontSize:11.5,color:SUB,marginTop:3}}>{empty?"① 인원을 추가한 뒤 다운로드할 수 있습니다.":"현재 표 기준으로 출력됩니다. (시뮬레이션은 「적용」 후 반영)"}</div>
         </div>
-        <button style={Object.assign({},bPri,{padding:"10px 20px",opacity:empty?0.5:1})} disabled={empty} onClick={function(){if(empty)return;qExportExcel(rows,set,agg,confirmed);doToast("견적서 엑셀이 생성되었습니다.");}}>⬇ 엑셀(.xls) 다운로드</button>
+        <button style={Object.assign({},bPri,{padding:"10px 20px",opacity:empty?0.5:1})} disabled={empty} onClick={function(){if(empty)return;qExportExcel(rows,set,agg);doToast("견적서 엑셀이 생성되었습니다.");}}>⬇ 엑셀(.xls) 다운로드</button>
       </div>
 
       </div>{/* ── 메인 컬럼 끝 ── */}
@@ -508,13 +528,13 @@ function QuotationPage(){
             {[["weekHours","주간직 기본시간"],["shiftHours","교대직 기본시간"],["stdHours","소정근로시간"]].map(function(f){
               return <div key={f[0]} style={setRow}><span style={setLbl}>{f[1]}</span><NumInput w={86} value={draft[f[0]]} onChange={function(v){updDraft(f[0],v);}} /></div>;
             })}
-            <div style={{fontSize:10,color:SUB,marginTop:2,lineHeight:1.5}}>· 적용 시 전 직군 근로시간이 갱신됩니다.</div>
+            <div style={{fontSize:10,color:SUB,marginTop:2,lineHeight:1.5}}>🔹 적용 시 전 직군 근로시간이 갱신됩니다.</div>
           </div>
 
           <div style={{marginBottom:16}}>
             <div style={grpTt}>최저임금</div>
             <div style={setRow}><span style={setLbl}>법정최저시급 (원)</span><NumInput w={86} value={draft.minWage} onChange={function(v){updDraft("minWage",v);}} /></div>
-            <div style={{fontSize:10,color:SUB,marginTop:2}}>· 2026년 적용: 10,320원</div>
+            <div style={{fontSize:10,color:SUB,marginTop:2}}>🔹 2026년 적용: 10,320원</div>
           </div>
 
           <div style={{marginBottom:16}}>
@@ -522,7 +542,7 @@ function QuotationPage(){
             {[["rPension","국민연금"],["rAccident","산재보험"],["rHealth","건강보험"],["rEmploy","고용보험"],["rCare","장기요양"],["rBizTax","사업소세"]].map(function(f){
               return <div key={f[0]} style={setRow}><span style={setLbl}>{f[1]} (%)</span><PctInput w={86} value={draft[f[0]]} onChange={function(v){updDraft(f[0],v);}} /></div>;
             })}
-            <div style={{fontSize:10,color:SUB,marginTop:4,lineHeight:1.5}}>· 국민연금~장기요양: 기본급여~연차수당 기준<br/>· 사업소세: 건강보험 기준</div>
+            <div style={{fontSize:10,color:SUB,marginTop:4,lineHeight:1.5}}>🔹 국민연금~장기요양: 기본급여~연차수당 기준<br/>🔹 사업소세: 건강보험 기준</div>
           </div>
 
           <div style={{marginBottom:14}}>
@@ -537,6 +557,29 @@ function QuotationPage(){
           {setDirty && <div style={{fontSize:10.5,color:WARN,marginTop:9,textAlign:"center",fontWeight:600}}>● 미적용 변경사항이 있습니다</div>}
         </div>
       </aside>
+
+      {showHist && <div onClick={function(){setShowHist(false);}} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",zIndex:1500,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"60px 16px",overflow:"auto"}}>
+        <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:10,width:680,maxWidth:"100%",padding:22}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+            <div style={{fontSize:16,fontWeight:800,color:INK}}>🕘 견적서 히스토리</div>
+            <button onClick={function(){setShowHist(false);}} style={{background:"#f1f5f4",border:"none",cursor:"pointer",padding:"6px 11px",borderRadius:7,fontSize:15}}>✕</button>
+          </div>
+          <div style={{fontSize:11.5,color:SUB,marginBottom:14}}>저장한 견적서를 불러오면 현재 작업 내용이 교체됩니다. (이 브라우저에 저장됩니다)</div>
+          {hist.length===0 ? <div style={emptyBox}>저장된 견적서가 없습니다. 제목을 입력하고 💾 저장을 눌러보세요.</div> :
+          <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:"55vh",overflowY:"auto"}}>
+            {hist.map(function(e){
+              return <div key={e.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",border:"1px solid "+LINE,borderRadius:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13.5,fontWeight:700,color:INK}}>{e.title}</div>
+                  <div style={{fontSize:11,color:SUB,marginTop:2}}>{e.savedAt} · {e.head}명 · {won(e.total)} (부가세 별도)</div>
+                </div>
+                <button style={bSm} onClick={function(){doLoadHist(e);}}>불러오기</button>
+                <button style={Object.assign({},bDef,{color:WARN,borderColor:"#f0c9c5"})} onClick={function(){doDelHist(e.id);}}>삭제</button>
+              </div>;
+            })}
+          </div>}
+        </div>
+      </div>}
 
       {toast && <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:BLUED,color:"#fff",padding:"11px 26px",borderRadius:8,fontSize:13,fontWeight:600,boxShadow:"0 6px 24px rgba(0,0,0,.2)",zIndex:2000}}>{toast}</div>}
     </div>
