@@ -249,9 +249,11 @@ function qExportExcel(rows,s,agg,catalog,title){
   function cN(st,val,fml){ return "<Cell ss:StyleID=\""+st+"\""+(fml?" ss:Formula=\""+esc(fml)+"\"":"")+"><Data ss:Type=\"Number\">"+(Math.round(Number(val)||0))+"</Data></Cell>"; }
   function cS(st,txt,merge){ return "<Cell ss:StyleID=\""+st+"\""+(merge?" ss:MergeAcross=\""+merge+"\"":"")+"><Data ss:Type=\"String\">"+esc(txt)+"</Data></Cell>"; }
   function cE(st){ return "<Cell ss:StyleID=\""+st+"\"/>"; }
+  /* 열 너비 */
+  var colXml=""; colMap.forEach(function(c){ var w=c.t==="gubun"?120:(c.t==="job"?82:(c.t==="sub"?88:(c.t==="total"?98:230))); colXml+="<Column ss:Width=\""+w+"\"/>"; });
   var body="";
-  body+="<Row ss:Height=\"26\">"+cS("t",(title||"건물종합관리용역")+" 용역 산출 내역서",ncols-1)+"</Row>";
-  var hd="<Row>"+cS("h","구  분");
+  body+="<Row ss:Height=\"30\">"+cS("t",(title||"건물종합관리용역")+" 용역 산출 내역서",ncols-1)+"</Row>";
+  var hd="<Row ss:Height=\"34\" ss:AutoFitHeight=\"0\">"+cS("h","구  분");
   groups.forEach(function(g){ g.idx.forEach(function(i){ hd+=cS("h",rows[i].label||"(직군)"); }); hd+=cS("h","소계"); });
   hd+=cS("h","합계(월간)")+cS("h","산정기준")+"</Row>"; body+=hd;
   ROWS.forEach(function(d){
@@ -279,7 +281,7 @@ function qExportExcel(rows,s,agg,catalog,title){
     +"<Style ss:ID=\"g\"><Alignment ss:Horizontal=\"Right\" ss:Vertical=\"Center\"/>"+BRD+"<Font ss:FontName=\"맑은 고딕\" ss:Size=\"10\" ss:Bold=\"1\"/><Interior ss:Color=\"#FFF2CC\" ss:Pattern=\"Solid\"/><NumberFormat ss:Format=\"#,##0\"/></Style>"
     +"<Style ss:ID=\"b\"><Alignment ss:Horizontal=\"Left\" ss:Vertical=\"Center\" ss:WrapText=\"1\"/>"+BRD+"<Font ss:FontName=\"맑은 고딕\" ss:Size=\"8\" ss:Color=\"#666666\"/></Style>"
     +"</Styles>";
-  var xml="<?xml version=\"1.0\"?>\n<?mso-application progid=\"Excel.Sheet\"?>\n<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\">"+styles+"<Worksheet ss:Name=\"산출내역서\"><Table>"+body+"</Table></Worksheet></Workbook>";
+  var xml="<?xml version=\"1.0\"?>\n<?mso-application progid=\"Excel.Sheet\"?>\n<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\">"+styles+"<Worksheet ss:Name=\"산출내역서\"><Table ss:DefaultRowHeight=\"18\">"+colXml+body+"</Table><WorksheetOptions xmlns=\"urn:schemas-microsoft-com:office:excel\"><FreezePanes/><FrozenNoSplit/><SplitVertical>1</SplitVertical><LeftColumnRightPane>1</LeftColumnRightPane><SplitHorizontal>2</SplitHorizontal><TopRowBottomPane>2</TopRowBottomPane><ActivePane>3</ActivePane></WorksheetOptions></Worksheet></Workbook>";
   var blob=new Blob(["﻿",xml],{type:"application/vnd.ms-excel;charset=utf-8"});
   var url=URL.createObjectURL(blob);
   var a=document.createElement("a");
@@ -306,6 +308,7 @@ function QuotationPage(){
   var _r=useState([]), rows=_r[0], setRows=_r[1];
   var _cat=useState(function(){return defCatalog();}), catalog=_cat[0], setCatalog=_cat[1];
   var _scat=useState(false), showCat=_scat[0], setShowCat=_scat[1];
+  var _scfg=useState(false), showCfg=_scfg[0], setShowCfg=_scfg[1];
   var _ctab=useState("시설"), catTab=_ctab[0], setCatTab=_ctab[1];
   var _na=useState(""), newArea=_na[0], setNewArea=_na[1];
   var areas=Object.keys(catalog);
@@ -400,7 +403,7 @@ function QuotationPage(){
                     var on=curHistId===e.id;
                     return <div key={e.id} onClick={function(){doLoadHist(e);}} style={{cursor:"pointer",padding:"8px 9px",borderRadius:7,border:"1px solid "+(on?BLUE:LINE),background:on?BLUEL:"#fff",position:"relative"}}>
                       <div style={{fontSize:12,fontWeight:700,color:on?BLUE:INK,paddingRight:16,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.title}</div>
-                      <div style={{fontSize:9.5,color:SUB,marginTop:2}}>{e.savedAt}</div>
+                      <div style={{fontSize:12,color:BLUED,marginTop:3,fontWeight:700}}>🕒 {e.savedAt}</div>
                       <div style={{fontSize:10,color:INK,marginTop:1,fontWeight:600}}>{won(e.total)} · {e.head}명</div>
                       <button onClick={function(ev){ev.stopPropagation();doDelHist(e.id);}} title="삭제" style={{position:"absolute",top:5,right:5,background:"transparent",border:"none",color:SUB,cursor:"pointer",fontSize:12,lineHeight:1}}>✕</button>
                     </div>;
@@ -420,6 +423,7 @@ function QuotationPage(){
         <input value={site} onChange={function(e){setSite(e.target.value);}} placeholder="사업소명 (예: 마곡연구소)" style={{width:180,padding:"10px 14px",borderRadius:7,border:"1px solid "+BLUE,fontSize:14,fontWeight:700,color:BLUE}} />
         <input value={title} onChange={function(e){setTitle(e.target.value);}} placeholder="견적서 제목 (예: 2026 건물관리)" style={{flex:1,minWidth:200,padding:"10px 14px",borderRadius:7,border:"1px solid "+LINE,fontSize:14.5,fontWeight:700,color:INK}} />
         <button style={bPri} onClick={doSave}>💾 저장</button>
+        <button style={Object.assign({},bSm,{padding:"9px 14px"})} onClick={function(){setShowCfg(true);}}>⚙ 설정{setDirty&&<span style={{color:WARN,marginLeft:3}}>●</span>}</button>
       </div>
       {/* 상단 요약 */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
@@ -723,47 +727,46 @@ function QuotationPage(){
 
       </div>{/* ── 메인 컬럼 끝 ── */}
 
-      {/* 오른쪽 고정 설정 패널 (입력 → 적용 시 반영) */}
-      <aside style={{width:272,flexShrink:0,position:"sticky",top:16,maxHeight:"calc(100vh - 32px)",overflowY:"auto"}}>
-        <div style={{background:"#fff",border:"1px solid "+LINE,borderRadius:8,padding:16}}>
-          <div style={{fontSize:14,fontWeight:800,color:INK,marginBottom:3}}>⚙ 설정</div>
-          <div style={{fontSize:10.5,color:SUB,marginBottom:12,lineHeight:1.5}}>값을 입력한 뒤 <b style={{color:BLUE}}>적용(확인)</b>을 누르면 왼쪽 표·계산에 반영됩니다.</div>
-          <button style={Object.assign({},bSm,{width:"100%",marginBottom:14,padding:"9px 0"})} onClick={function(){setShowCat(true);}}>📋 직군별 단가 설정</button>
-
-          <div style={{marginBottom:16}}>
-            <div style={grpTt}>근무 설정</div>
-            {[["weekHours","주간직 기본시간"],["shiftHours","교대직 기본시간"],["stdHours","소정근로시간"]].map(function(f){
-              return <div key={f[0]} style={setRow}><span style={setLbl}>{f[1]}</span><NumInput w={86} value={draft[f[0]]} onChange={function(v){updDraft(f[0],v);}} /></div>;
-            })}
-            <div style={{fontSize:10,color:SUB,marginTop:2,lineHeight:1.5}}>🔹 적용 시 전 직군 근로시간이 갱신됩니다.</div>
+      {/* 설정 모달 (⚙ 설정 버튼으로 열기) */}
+      {showCfg && <div onClick={function(){setShowCfg(false);}} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",zIndex:1500,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"50px 16px",overflow:"auto"}}>
+        <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:10,width:740,maxWidth:"100%",padding:24}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+            <div style={{fontSize:17,fontWeight:800,color:INK}}>⚙ 설정</div>
+            <button onClick={function(){setShowCfg(false);}} style={{background:"#f1f5f4",border:"none",cursor:"pointer",padding:"6px 11px",borderRadius:7,fontSize:15}}>✕</button>
           </div>
-
-          <div style={{marginBottom:16}}>
-            <div style={grpTt}>최저임금</div>
-            <div style={setRow}><span style={setLbl}>법정최저시급 (원)</span><NumInput w={86} value={draft.minWage} onChange={function(v){updDraft("minWage",v);}} /></div>
-            <div style={{fontSize:10,color:SUB,marginTop:2}}>🔹 2026년 적용: 10,320원</div>
+          <div style={{fontSize:11.5,color:SUB,marginBottom:16}}>값을 입력한 뒤 <b style={{color:BLUE}}>적용</b>을 누르면 표·계산에 반영됩니다. {setDirty&&<b style={{color:WARN}}>　● 미적용 변경사항 있음</b>}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:18}}>
+            <div style={{border:"1px solid "+LINE,borderRadius:8,padding:16}}>
+              <div style={grpTt}>근무 설정</div>
+              {[["weekHours","주간직 기본시간"],["shiftHours","교대직 기본시간"],["stdHours","소정근로시간"]].map(function(f){
+                return <div key={f[0]} style={setRow}><span style={setLbl}>{f[1]}</span><NumInput w={110} value={draft[f[0]]} onChange={function(v){updDraft(f[0],v);}} /></div>;
+              })}
+              <div style={{fontSize:10.5,color:SUB,marginTop:4,lineHeight:1.5}}>🔹 적용 시 전 직군 근로시간이 갱신됩니다.</div>
+            </div>
+            <div style={{border:"1px solid "+LINE,borderRadius:8,padding:16}}>
+              <div style={grpTt}>최저임금</div>
+              <div style={setRow}><span style={setLbl}>법정최저시급 (원)</span><NumInput w={110} value={draft.minWage} onChange={function(v){updDraft("minWage",v);}} /></div>
+              <div style={{fontSize:10.5,color:SUB,marginTop:4}}>🔹 2026년 적용: 10,320원</div>
+              <div style={{marginTop:14}}><button style={Object.assign({},bSm,{width:"100%",padding:"10px 0"})} onClick={function(){setShowCat(true);}}>📋 직군별 단가 설정 열기</button></div>
+            </div>
+            <div style={{border:"1px solid "+LINE,borderRadius:8,padding:16}}>
+              <div style={grpTt}>4대보험 및 세금</div>
+              {[["rPension","국민연금"],["rAccident","산재보험"],["rHealth","건강보험"],["rEmploy","고용보험"],["rCare","장기요양"],["rBizTax","사업소세"]].map(function(f){
+                return <div key={f[0]} style={setRow}><span style={setLbl}>{f[1]} (%)</span><PctInput w={110} value={draft[f[0]]} onChange={function(v){updDraft(f[0],v);}} /></div>;
+              })}
+              <div style={{fontSize:10,color:SUB,marginTop:4,lineHeight:1.5}}>🔹 국민연금·산재·건강·고용·사업소세: 기본급여~연차수당 기준<br/>🔹 장기요양: 건강보험 계산값 기준</div>
+            </div>
+            <div style={{border:"1px solid "+LINE,borderRadius:8,padding:16}}>
+              <div style={grpTt}>부가가치세</div>
+              <div style={setRow}><span style={setLbl}>부가세 (%)</span><PctInput w={110} value={draft.vat} onChange={function(v){updDraft("vat",v);}} /></div>
+            </div>
           </div>
-
-          <div style={{marginBottom:16}}>
-            <div style={grpTt}>4대보험 및 세금</div>
-            {[["rPension","국민연금"],["rAccident","산재보험"],["rHealth","건강보험"],["rEmploy","고용보험"],["rCare","장기요양"],["rBizTax","사업소세"]].map(function(f){
-              return <div key={f[0]} style={setRow}><span style={setLbl}>{f[1]} (%)</span><PctInput w={86} value={draft[f[0]]} onChange={function(v){updDraft(f[0],v);}} /></div>;
-            })}
-            <div style={{fontSize:10,color:SUB,marginTop:4,lineHeight:1.5}}>🔹 국민연금·산재·건강·고용·사업소세: 기본급여~연차수당 기준<br/>🔹 장기요양: 건강보험 계산값 기준</div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button style={Object.assign({},bDef,{padding:"10px 20px",opacity:setDirty?1:0.5})} onClick={resetDraft}>되돌리기</button>
+            <button style={Object.assign({},bPri,{padding:"10px 24px"})} onClick={applySettings}>적용 (확인)</button>
           </div>
-
-          <div style={{marginBottom:14}}>
-            <div style={grpTt}>부가가치세</div>
-            <div style={setRow}><span style={setLbl}>부가세 (%)</span><PctInput w={86} value={draft.vat} onChange={function(v){updDraft("vat",v);}} /></div>
-          </div>
-
-          <div style={{display:"flex",gap:8}}>
-            <button style={Object.assign({},bDef,{flex:1,padding:"9px 0",opacity:setDirty?1:0.5})} onClick={resetDraft}>되돌리기</button>
-            <button style={Object.assign({},bPri,{flex:1,padding:"9px 0"})} onClick={applySettings}>적용 (확인)</button>
-          </div>
-          {setDirty && <div style={{fontSize:10.5,color:WARN,marginTop:9,textAlign:"center",fontWeight:600}}>● 미적용 변경사항이 있습니다</div>}
         </div>
-      </aside>
+      </div>}
 
       {showCat && <div onClick={function(){setShowCat(false);}} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",zIndex:1500,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"50px 16px",overflow:"auto"}}>
         <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:10,width:760,maxWidth:"100%",padding:22}}>
