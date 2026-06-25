@@ -60,6 +60,7 @@ function r10(n){ return Math.round((Number(n)||0)/10)*10; }   /* ROUND(x,-1) */
 function r0(n){ return Math.round(Number(n)||0); }            /* ROUND(x,0) */
 function nf(n){ return Math.round(Number(n)||0).toLocaleString("ko-KR"); }
 function won(n){ return "₩"+nf(n); }
+var _uid=0; function uid(p){ _uid++; return (p||"id")+_uid+"_"+Math.round(Math.random()*1e6); }
 
 /* ═══ 공통 스타일 ═══ */
 var card={background:"#fff",borderRadius:8,border:"1px solid "+LINE,padding:18,marginBottom:14};
@@ -80,6 +81,7 @@ var bSm={padding:"6px 12px",borderRadius:6,border:"1px solid "+BLUE,cursor:"poin
 var lblS={display:"block",fontSize:11.5,fontWeight:600,color:SUB,marginBottom:5};
 var tableWrap={overflowX:"auto",border:"1px solid "+LINE,borderRadius:6};
 var tbl={borderCollapse:"collapse",fontSize:12.5,width:"100%",minWidth:"max-content"};
+var emptyBox={padding:"22px",textAlign:"center",color:SUB,fontSize:12.5,background:"#fafbfc",border:"1px dashed "+LINE,borderRadius:6};
 
 /* ═══ 입력 컴포넌트 (천단위 콤마) ═══ */
 function NumInput(p){
@@ -101,28 +103,18 @@ function PctInput(p){
 function DelBtn(p){ return <button onClick={p.onClick} title="삭제" style={{background:"#fff",border:"1px solid "+LINE,color:SUB,borderRadius:5,padding:"4px 9px",cursor:"pointer",fontSize:12}}>✕</button>; }
 
 /* ═══ 기본 설정값 (법령·정책 변경 시 설정에서 관리) ═══ */
-var Q_DEF_SET={ weekHours:209, shiftHours:213, stdHours:9, minWage:10030,
+var Q_DEF_SET={ weekHours:209, shiftHours:213, stdHours:9, minWage:10320,
   rPension:4.75, rAccident:0.860, rHealth:3.595, rEmploy:1.75, rCare:0.5, rBizTax:12.95,
   adminRate:5.0, profitRate:10.0, vat:10.0 };
 var Q_PANEL_KEYS=["weekHours","shiftHours","stdHours","minWage","rPension","rAccident","rHealth","rEmploy","rCare","rBizTax","vat"];
 function qPick(o){ var r={}; Q_PANEL_KEYS.forEach(function(k){ r[k]=o[k]; }); return r; }
 
-var Q_SEED_ROWS=[
-  {id:"q1",label:"시설관리 (주간)",count:3,workType:"week",baseHours:209,stdHours:9,hourly:11000,basic:2400000,posPay:200000,qualPay:50000,otHours:0,otApply:false,ntHours:0,ntApply:false,annualDays:10},
-  {id:"q2",label:"보안 (교대)",count:4,workType:"shift",baseHours:213,stdHours:9,hourly:10500,basic:2300000,posPay:0,qualPay:0,otHours:34,otApply:true,ntHours:60,ntApply:true,annualDays:10},
-  {id:"q3",label:"미화 (주간)",count:6,workType:"week",baseHours:209,stdHours:9,hourly:10100,basic:2096270,posPay:0,qualPay:0,otHours:0,otApply:false,ntHours:0,ntApply:false,annualDays:10}
-];
-var Q_SEED_GEN=[
-  {id:"g1",nm:"피복비",unit:120000,qty:1,nightBased:false},
-  {id:"g2",nm:"특수검진비",unit:80000,qty:1,nightBased:false},
-  {id:"g3",nm:"선물비",unit:100000,qty:1,nightBased:false},
-  {id:"g4",nm:"운영비",unit:50000,qty:1,nightBased:false},
-  {id:"g5",nm:"특수검진비(야간)",unit:60000,qty:1,nightBased:true}
-];
-var Q_SEED_OTH=[
-  {id:"o1",nm:"수수료",unit:30000,qty:1},
-  {id:"o2",nm:"식대",unit:220000,qty:1}
-];
+/* 새 인원(직군) 행 — 인원 추가 시 제경비·기타경비 1줄씩 자동 생성 */
+function newRow(s){
+  return {id:uid("q"),label:"",count:1,workType:"week",baseHours:s.weekHours,stdHours:s.stdHours,
+    basic:"",posPay:"",qualPay:"",otHours:"",otApply:false,ntHours:"",ntApply:false,annualDays:10,
+    genItems:[{id:uid("gi"),nm:"",unit:"",qty:1}], othItems:[{id:uid("oi"),nm:"",unit:"",qty:1}]};
+}
 
 /* 한 인원(직군) 행의 모든 파생값 — 모든 금액은 1인 기준 */
 function qCalcRow(r,s){
@@ -134,52 +126,46 @@ function qCalcRow(r,s){
   var ot = r.otApply ? r10((Number(r.otHours)||0)*common*1.5) : 0;
   var nt = r.ntApply ? r10((Number(r.ntHours)||0)*common*0.5) : 0;
   var annual = r10(stdHours*common*(Number(r.annualDays)||0)/12);
-  var directBase = basic+pos+qual+ot+nt+annual;                 /* 기본급여~연차수당 합 */
-  var retire = r10(directBase/12);                              /* 퇴직충당금 */
-  var directSum = directBase+retire;                            /* 직접인건비 소계 */
-  var monthlyPay = directSum-retire-annual;                     /* 월급여(실지급) */
+  var directBase = basic+pos+qual+ot+nt+annual;
+  var retire = r10(directBase/12);
+  var directSum = directBase+retire;
+  var monthlyPay = directSum-retire-annual;
   var pension=r0(directBase*s.rPension/100), accident=r0(directBase*s.rAccident/100),
       health=r0(directBase*s.rHealth/100), employ=r0(directBase*s.rEmploy/100),
       care=r0(directBase*s.rCare/100), bizTax=r0(health*s.rBizTax/100);
   var indirectSum = pension+accident+health+employ+care+bizTax;
-  return {baseHours:baseHours,stdHours:stdHours,common:common,ot:ot,nt:nt,annual:annual,directBase:directBase,
-    retire:retire,directSum:directSum,monthlyPay:monthlyPay,pension:pension,accident:accident,health:health,
-    employ:employ,care:care,bizTax:bizTax,indirectSum:indirectSum,hourly:hourly,belowMin:hourly<s.minWage};
+  /* 기타비용 — 각 직군 행에 개별 입력 (1인당 단가) */
+  var etcGenPer=(r.genItems||[]).reduce(function(a,g){return a+(Number(g.unit)||0)*(Number(g.qty)||0);},0);
+  var etcOthPer=(r.othItems||[]).reduce(function(a,o){return a+(Number(o.unit)||0)*(Number(o.qty)||0);},0);
+  return {baseHours:baseHours,stdHours:stdHours,common:common,hourly:hourly,ot:ot,nt:nt,annual:annual,
+    directBase:directBase,retire:retire,directSum:directSum,monthlyPay:monthlyPay,pension:pension,accident:accident,
+    health:health,employ:employ,care:care,bizTax:bizTax,indirectSum:indirectSum,
+    etcGenPer:etcGenPer,etcOthPer:etcOthPer,etc:etcGenPer+etcOthPer,belowMin:hourly<s.minWage};
 }
 
-function qCalcAll(rows,gen,oth,s){
+function qCalcAll(rows,s){
   var totalHead=rows.reduce(function(a,r){return a+(Number(r.count)||0);},0);
-  var nightHead=rows.reduce(function(a,r){return a+(r.ntApply?(Number(r.count)||0):0);},0);
-  /* 제경비·기타경비는 1인당 단가 → 직군 인원수만큼 적용 */
-  var genDayPer=gen.reduce(function(a,g){return a+(g.nightBased?0:(Number(g.unit)||0)*(Number(g.qty)||0));},0);   /* 1인당 제경비(상시) */
-  var genNightPer=gen.reduce(function(a,g){return a+(g.nightBased?(Number(g.unit)||0)*(Number(g.qty)||0):0);},0); /* 1인당 제경비(야간전용) */
-  var othPer=oth.reduce(function(a,o){return a+(Number(o.unit)||0)*(Number(o.qty)||0);},0);                       /* 1인당 기타경비 */
-  var genTotal=0, othTotal=0;
   var calc=rows.map(function(r){
     var c=qCalcRow(r,s);
     var cnt=Number(r.count)||0; c.count=cnt;
-    c.etcGenPer=genDayPer+(r.ntApply?genNightPer:0);            /* 1인당 제경비 (야간직군은 야간전용 포함) */
-    c.etcOthPer=othPer;                                         /* 1인당 기타경비 */
-    c.etc=c.etcGenPer+c.etcOthPer;                              /* 1인당 기타비용 */
-    genTotal+=c.etcGenPer*cnt; othTotal+=c.etcOthPer*cnt;
+    c.rowEtc=c.etc*cnt;
     c.junggye=c.directSum+c.indirectSum+c.etc;                  /* 중계 = 직접+간접+기타 */
     c.admin=r0(c.junggye*s.adminRate/100);                      /* 일반관리비 */
     c.profit=r0((c.junggye+c.admin)*s.profitRate/100);          /* 기업이윤 */
     c.exVat=c.junggye+c.admin+c.profit;                         /* 부가세별도 (1인) */
     c.inVat=r0(c.exVat*(1+s.vat/100));                          /* 부가세포함 (1인) */
-    c.rowEtc=c.etc*cnt; c.rowExVat=c.exVat*cnt; c.rowInVat=c.inVat*cnt; c.rowIndirect=c.indirectSum*cnt;
+    c.rowExVat=c.exVat*cnt; c.rowInVat=c.inVat*cnt; c.rowIndirect=c.indirectSum*cnt;
     return c;
   });
-  var etcTotal=genTotal+othTotal;
+  var etcTotal=calc.reduce(function(a,c){return a+c.rowEtc;},0);
   var totalExVat=calc.reduce(function(a,c){return a+c.rowExVat;},0);
   var totalIndirect=calc.reduce(function(a,c){return a+c.rowIndirect;},0);
   var totalInVat=r0(totalExVat*(1+s.vat/100));
-  return {calc:calc,totalHead:totalHead,nightHead:nightHead,genDayPer:genDayPer,genNightPer:genNightPer,othPer:othPer,
-    genTotal:genTotal,othTotal:othTotal,etcTotal:etcTotal,totalExVat:totalExVat,totalInVat:totalInVat,totalIndirect:totalIndirect};
+  return {calc:calc,totalHead:totalHead,etcTotal:etcTotal,totalExVat:totalExVat,totalInVat:totalInVat,totalIndirect:totalIndirect};
 }
 
 /* 엑셀(견적서 양식) 다운로드 — 외부 라이브러리 없이 .xls(HTML) 생성 */
-function qExportExcel(rows,gen,oth,s,agg,prices){
+function qExportExcel(rows,s,agg,prices){
   var th="border:1px solid #999;padding:5px 8px;background:#dbe5f1;font-weight:bold;text-align:center;";
   var td="border:1px solid #999;padding:5px 8px;text-align:right;";
   var tdL="border:1px solid #999;padding:5px 8px;text-align:left;";
@@ -192,15 +178,17 @@ function qExportExcel(rows,gen,oth,s,agg,prices){
     var c=agg.calc[i];
     var unit=prices&&prices[r.id]!=null?prices[r.id]:c.exVat;
     var rowSum=unit*c.count;
-    h+="<tr><td style='"+tdL+"'>"+r.label+"</td><td style='"+td+"'>"+c.count+"</td><td style='"+td+"'>"+nf(c.monthlyPay)+"</td><td style='"+td+"'>"+nf(c.directSum)+"</td><td style='"+td+"'>"+nf(c.indirectSum)+"</td><td style='"+td+"'>"+nf(c.etc)+"</td><td style='"+td+"'>"+nf(c.junggye)+"</td><td style='"+td+"'>"+nf(c.admin)+"</td><td style='"+td+"'>"+nf(c.profit)+"</td><td style='"+td+"'>"+nf(unit)+"</td><td style='"+td+"'>"+nf(rowSum)+"</td><td style='"+td+"'>"+nf(r0(rowSum*(1+s.vat/100)))+"</td></tr>";
+    h+="<tr><td style='"+tdL+"'>"+(r.label||"(직군명)")+"</td><td style='"+td+"'>"+c.count+"</td><td style='"+td+"'>"+nf(c.monthlyPay)+"</td><td style='"+td+"'>"+nf(c.directSum)+"</td><td style='"+td+"'>"+nf(c.indirectSum)+"</td><td style='"+td+"'>"+nf(c.etc)+"</td><td style='"+td+"'>"+nf(c.junggye)+"</td><td style='"+td+"'>"+nf(c.admin)+"</td><td style='"+td+"'>"+nf(c.profit)+"</td><td style='"+td+"'>"+nf(unit)+"</td><td style='"+td+"'>"+nf(rowSum)+"</td><td style='"+td+"'>"+nf(r0(rowSum*(1+s.vat/100)))+"</td></tr>";
   });
   var gExVat=prices?rows.reduce(function(a,r,i){var u=prices[r.id]!=null?prices[r.id]:agg.calc[i].exVat;return a+u*agg.calc[i].count;},0):agg.totalExVat;
   h+="<tr><td colspan='10' style='"+th+"text-align:right;'>합계 (부가세 별도)</td><td colspan='2' style='"+td+"font-weight:bold;'>"+nf(gExVat)+"</td></tr>";
   h+="<tr><td colspan='10' style='"+th+"text-align:right;'>합계 (부가세 포함)</td><td colspan='2' style='"+td+"font-weight:bold;'>"+nf(r0(gExVat*(1+s.vat/100)))+"</td></tr></table>";
-  h+="<br/><table style='border-collapse:collapse;font-family:맑은 고딕;font-size:12px;'><tr><td colspan='4' style='font-weight:bold;padding:6px;'>[ 기타비용 내역 (1인당 단가 기준) ]</td></tr>";
-  h+="<tr><th style='"+th+"'>항목</th><th style='"+th+"'>1인당 단가</th><th style='"+th+"'>수량</th><th style='"+th+"'>1인당 금액</th></tr>";
-  gen.forEach(function(g){var q=Number(g.qty)||0;h+="<tr><td style='"+tdL+"'>"+g.nm+(g.nightBased?" (야간전용)":"")+"</td><td style='"+td+"'>"+nf(g.unit)+"</td><td style='"+td+"'>"+q+"</td><td style='"+td+"'>"+nf((Number(g.unit)||0)*q)+"</td></tr>";});
-  oth.forEach(function(o){h+="<tr><td style='"+tdL+"'>"+o.nm+"</td><td style='"+td+"'>"+nf(o.unit)+"</td><td style='"+td+"'>"+(Number(o.qty)||0)+"</td><td style='"+td+"'>"+nf((Number(o.unit)||0)*(Number(o.qty)||0))+"</td></tr>";});
+  h+="<br/><table style='border-collapse:collapse;font-family:맑은 고딕;font-size:12px;'><tr><td colspan='5' style='font-weight:bold;padding:6px;'>[ 기타비용 내역 (직군별, 1인당 단가) ]</td></tr>";
+  h+="<tr><th style='"+th+"'>직군</th><th style='"+th+"'>구분</th><th style='"+th+"'>항목</th><th style='"+th+"'>단가 × 수량</th><th style='"+th+"'>1인당 금액</th></tr>";
+  rows.forEach(function(r){
+    (r.genItems||[]).forEach(function(g){ h+="<tr><td style='"+tdL+"'>"+(r.label||"")+"</td><td style='"+tdL+"'>제경비</td><td style='"+tdL+"'>"+(g.nm||"")+"</td><td style='"+td+"'>"+nf(g.unit)+" × "+(Number(g.qty)||0)+"</td><td style='"+td+"'>"+nf((Number(g.unit)||0)*(Number(g.qty)||0))+"</td></tr>"; });
+    (r.othItems||[]).forEach(function(o){ h+="<tr><td style='"+tdL+"'>"+(r.label||"")+"</td><td style='"+tdL+"'>기타경비</td><td style='"+tdL+"'>"+(o.nm||"")+"</td><td style='"+td+"'>"+nf(o.unit)+" × "+(Number(o.qty)||0)+"</td><td style='"+td+"'>"+nf((Number(o.unit)||0)*(Number(o.qty)||0))+"</td></tr>"; });
+  });
   h+="</table>";
   var html="<html><head><meta charset='UTF-8'></head><body>"+h+"</body></html>";
   var blob=new Blob(["﻿",html],{type:"application/vnd.ms-excel;charset=utf-8"});
@@ -211,22 +199,20 @@ function qExportExcel(rows,gen,oth,s,agg,prices){
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
 }
 
-/* 직군 라벨 셀 (각 계산표 좌측 공통) */
-function NameCell(p){ return <td style={Object.assign({},tdL,{fontWeight:600,position:"sticky",left:0,background:"#fff",borderRight:"1px solid "+LINE})}>{p.label} <span style={{color:SUB,fontWeight:400}}>×{p.count}</span></td>; }
+function NameCell(p){ return <td style={Object.assign({},tdL,{fontWeight:600,position:"sticky",left:0,background:"#fff",borderRight:"1px solid "+LINE})}>{p.label||<span style={{color:SUB,fontWeight:400}}>(직군명)</span>} <span style={{color:SUB,fontWeight:400}}>×{p.count}</span></td>; }
 
 function QuotationPage(){
   var _s=useState(Q_DEF_SET), set=_s[0], setSet=_s[1];
   var _ds=useState(function(){return qPick(Q_DEF_SET);}), draft=_ds[0], setDraft=_ds[1];
-  var _r=useState(Q_SEED_ROWS), rows=_r[0], setRows=_r[1];
-  var _g=useState(Q_SEED_GEN), gen=_g[0], setGen=_g[1];
-  var _o=useState(Q_SEED_OTH), oth=_o[0], setOth=_o[1];
-  var _sg=useState(false), showSet=_sg[0], setShowSet=_sg[1];
+  var _r=useState([]), rows=_r[0], setRows=_r[1];
   var _tg=useState(null), target=_tg[0], setTarget=_tg[1];
   var _cf=useState(null), confirmed=_cf[0], setConfirmed=_cf[1];
   var _ts=useState(null), toast=_ts[0], setToast=_ts[1];
   function doToast(m){ setToast(m); setTimeout(function(){setToast(null);},2500); }
+  function mk(k,v){var o={};o[k]=v;return o;}
 
-  var agg=useMemo(function(){return qCalcAll(rows,gen,oth,set);},[rows,gen,oth,set]);
+  var agg=useMemo(function(){return qCalcAll(rows,set);},[rows,set]);
+  var empty=rows.length===0;
   var baseTotal=agg.totalExVat;
   var simTarget=target==null?baseTotal:target;
   var simMin=Math.round(baseTotal*0.5), simMax=Math.round(baseTotal*1.5);
@@ -242,17 +228,20 @@ function QuotationPage(){
     return {factor:factor,perRow:perRow,newTotal:newTotal,fixed:fixed};
   },[agg,simTarget,baseTotal,rows]);
 
-  function mk(k,v){var o={};o[k]=v;return o;}
+  /* 인원 행 */
   function updRow(id,k,v){ setRows(function(p){return p.map(function(r){return r.id===id?Object.assign({},r,mk(k,v)):r;});}); }
   function setWorkType(id,wt){ setRows(function(p){return p.map(function(r){return r.id===id?Object.assign({},r,{workType:wt,baseHours:wt==="shift"?set.shiftHours:set.weekHours}):r;});}); }
-  function addRow(){ setRows(function(p){return p.concat([{id:"q"+Date.now(),label:"신규 직군",count:1,workType:"week",baseHours:set.weekHours,stdHours:set.stdHours,hourly:set.minWage,basic:2096270,posPay:0,qualPay:0,otHours:0,otApply:false,ntHours:0,ntApply:false,annualDays:10}]);}); }
+  function addRow(){ setRows(function(p){return p.concat([newRow(set)]);}); }
   function delRow(id){ setRows(function(p){return p.filter(function(r){return r.id!==id;});}); }
-  function updGen(id,k,v){ setGen(function(p){return p.map(function(g){return g.id===id?Object.assign({},g,mk(k,v)):g;});}); }
-  function addGen(){ setGen(function(p){return p.concat([{id:"g"+Date.now(),nm:"신규 제경비",unit:0,qty:1,nightBased:false}]);}); }
-  function delGen(id){ setGen(function(p){return p.filter(function(g){return g.id!==id;});}); }
-  function updOth(id,k,v){ setOth(function(p){return p.map(function(o){return o.id===id?Object.assign({},o,mk(k,v)):o;});}); }
-  function addOth(){ setOth(function(p){return p.concat([{id:"o"+Date.now(),nm:"신규 기타경비",unit:0,qty:1}]);}); }
-  function delOth(id){ setOth(function(p){return p.filter(function(o){return o.id!==id;});}); }
+  /* 행 내부 제경비 */
+  function updGenItem(rid,iid,k,v){ setRows(function(p){return p.map(function(r){return r.id!==rid?r:Object.assign({},r,{genItems:r.genItems.map(function(g){return g.id===iid?Object.assign({},g,mk(k,v)):g;})});});}); }
+  function addGenItem(rid){ setRows(function(p){return p.map(function(r){return r.id!==rid?r:Object.assign({},r,{genItems:r.genItems.concat([{id:uid("gi"),nm:"",unit:"",qty:1}])});});}); }
+  function delGenItem(rid,iid){ setRows(function(p){return p.map(function(r){return r.id!==rid?r:Object.assign({},r,{genItems:r.genItems.filter(function(g){return g.id!==iid;})});});}); }
+  /* 행 내부 기타경비 */
+  function updOthItem(rid,iid,k,v){ setRows(function(p){return p.map(function(r){return r.id!==rid?r:Object.assign({},r,{othItems:r.othItems.map(function(o){return o.id===iid?Object.assign({},o,mk(k,v)):o;})});});}); }
+  function addOthItem(rid){ setRows(function(p){return p.map(function(r){return r.id!==rid?r:Object.assign({},r,{othItems:r.othItems.concat([{id:uid("oi"),nm:"",unit:"",qty:1}])});});}); }
+  function delOthItem(rid,iid){ setRows(function(p){return p.map(function(r){return r.id!==rid?r:Object.assign({},r,{othItems:r.othItems.filter(function(o){return o.id!==iid;})});});}); }
+  /* 설정 */
   function updSet(k,v){ setSet(function(p){return Object.assign({},p,mk(k,v));}); }
   function updDraft(k,v){ setDraft(function(p){return Object.assign({},p,mk(k,v));}); }
   function applySettings(){
@@ -272,6 +261,7 @@ function QuotationPage(){
   var grpTt={fontSize:11.5,fontWeight:700,color:BLUE,borderBottom:"1px solid "+LINE,paddingBottom:6,marginBottom:9};
   var setRow={display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,gap:8};
   var setLbl={fontSize:11.5,color:INK};
+  var stbl={borderCollapse:"collapse",fontSize:12,width:"100%"};
 
   return (
     <div style={{display:"flex",gap:16,alignItems:"flex-start"}}>
@@ -290,7 +280,8 @@ function QuotationPage(){
           <div style={secHd}><span style={secNo}>1</span><span style={secTt}>인원 · 근무시간</span></div>
           <button style={bPri} onClick={addRow}>+ 인원 추가</button>
         </div>
-        <div style={{fontSize:11.5,color:SUB,marginBottom:10}}>인원을 먼저 입력하면 아래 직접인건비·간접인건비·기타비용·이윤이 이 기준으로 자동 계산됩니다. (행 추가/수정/삭제 가능)</div>
+        <div style={{fontSize:11.5,color:SUB,marginBottom:10}}>「+ 인원 추가」로 직군을 하나씩 추가하세요. 추가 시 ④기타비용에 제경비·기타경비 입력란이 1줄씩 함께 생성됩니다.</div>
+        {empty ? <div style={emptyBox}>아직 등록된 인원이 없습니다. 오른쪽 위 <b style={{color:BLUE}}>「+ 인원 추가」</b> 를 눌러 시작하세요.</div> :
         <div style={tableWrap}><table style={tbl}>
           <thead><tr>
             <th style={thL}>직군/구분</th><th style={thC}>근무형태</th><th style={thS}>인원 수</th><th style={thS}>기본근로시간</th><th style={thS}>소정근로시간</th><th style={thS}>시간급</th><th style={thS}>통상시급</th><th style={thC}></th>
@@ -298,7 +289,7 @@ function QuotationPage(){
           <tbody>{rows.map(function(r){
             var c=qCalcRow(r,set);
             return <tr key={r.id}>
-              <td style={tdL}><TxtInput w={130} value={r.label} onChange={function(v){updRow(r.id,"label",v);}} /></td>
+              <td style={tdL}><TxtInput w={130} value={r.label} ph="직군명 입력" onChange={function(v){updRow(r.id,"label",v);}} /></td>
               <td style={tdC}><select value={r.workType} onChange={function(e){setWorkType(r.id,e.target.value);}} style={{padding:"6px 6px",borderRadius:5,border:"1px solid "+LINE,fontSize:12.5}}><option value="week">주간직</option><option value="shift">교대직</option></select></td>
               <td style={tdS}><NumInput w={54} value={r.count} onChange={function(v){updRow(r.id,"count",v);}} /></td>
               <td style={tdS}><NumInput w={66} value={r.baseHours} onChange={function(v){updRow(r.id,"baseHours",v);}} /></td>
@@ -308,13 +299,14 @@ function QuotationPage(){
               <td style={tdC}><DelBtn onClick={function(){delRow(r.id);}} /></td>
             </tr>;
           })}</tbody>
-        </table></div>
-        <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.6}}>· 기본근로시간: 주간직 {set.weekHours} / 교대직 {set.shiftHours} (근무형태 선택 시 자동 입력, 수정 가능)<br/>· <b style={{color:INK}}>시간급</b> = ROUND(기본급여 ÷ 기본근로시간) · <b style={{color:INK}}>통상시급</b> = ROUND((기본급여+직책수당) ÷ 기본근로시간) → 둘 다 <b style={{color:BLUE}}>②직접인건비의 기본급여</b>를 입력하면 자동 계산됩니다.</div>
+        </table></div>}
+        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.6}}>· 기본근로시간: 주간직 {set.weekHours} / 교대직 {set.shiftHours} (근무형태 선택 시 자동 입력, 수정 가능)<br/>· <b style={{color:INK}}>시간급</b> = ROUND(기본급여 ÷ 기본근로시간) · <b style={{color:INK}}>통상시급</b> = ROUND((기본급여+직책수당) ÷ 기본근로시간) → <b style={{color:BLUE}}>②기본급여</b> 입력 시 자동 계산</div>}
       </div>
 
       {/* 2. 직접인건비 */}
       <div style={card}>
         <div style={secHd}><span style={secNo}>2</span><span style={secTt}>직접인건비 계산</span></div>
+        {empty ? <div style={emptyBox}>① 인원을 먼저 추가하세요.</div> :
         <div style={tableWrap}><table style={tbl}>
           <thead><tr>
             <th style={thL}>직군</th><th style={thS}>기본급여</th><th style={thS}>직책·자격수당</th><th style={thC}>연장</th><th style={thS}>연장근로수당</th><th style={thC}>야간</th><th style={thS}>야간근로수당</th><th style={thS}>연차일</th><th style={thS}>연차수당</th><th style={thS}>퇴직충당금</th><th style={thS}>소계</th>
@@ -335,14 +327,15 @@ function QuotationPage(){
               <td style={Object.assign({},tdS,{fontWeight:700})}>{nf(c.directSum)}</td>
             </tr>;
           })}</tbody>
-          <tfoot><tr><td style={tfL}>합계</td><td colSpan="9" style={Object.assign({},tfR,{textAlign:"right"})}></td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.directSum*c.count;},0))}</td></tr></tfoot>
-        </table></div>
-        <div style={{fontSize:11,color:SUB,marginTop:8}}>· 연장 = ROUND(연장시간×통상시급×1.5, -1) · 야간 = ROUND(야간시간×통상시급×0.5, -1) · 연차 = ROUND(소정근로시간×통상시급×연차일÷12, -1) · 퇴직충당금 = ROUND(소계(기본급여~연차수당)÷12, -1)</div>
+          <tfoot><tr><td style={tfL}>합계</td><td colSpan="9" style={tfR}></td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.directSum*c.count;},0))}</td></tr></tfoot>
+        </table></div>}
+        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8}}>· 연장 = ROUND(연장시간×통상시급×1.5, -1) · 야간 = ROUND(야간시간×통상시급×0.5, -1) · 연차 = ROUND(소정근로시간×통상시급×연차일÷12, -1) · 퇴직충당금 = ROUND(소계(기본급여~연차수당)÷12, -1)</div>}
       </div>
 
       {/* 3. 간접인건비 */}
       <div style={card}>
         <div style={secHd}><span style={secNo}>3</span><span style={secTt}>간접인건비 계산 (4대보험 + 세금)</span></div>
+        {empty ? <div style={emptyBox}>① 인원을 먼저 추가하세요.</div> :
         <div style={tableWrap}><table style={tbl}>
           <thead><tr>
             <th style={thL}>직군</th><th style={thS}>국민연금</th><th style={thS}>산재보험</th><th style={thS}>건강보험</th><th style={thS}>고용보험</th><th style={thS}>장기요양</th><th style={thS}>사업소세</th><th style={thS}>소계</th>
@@ -357,65 +350,67 @@ function QuotationPage(){
             </tr>;
           })}</tbody>
           <tfoot><tr><td style={tfL}>합계</td><td colSpan="6" style={tfR}></td><td style={tfR}>{nf(agg.totalIndirect)}</td></tr></tfoot>
-        </table></div>
-        <div style={{fontSize:11,color:SUB,marginTop:8}}>· 기준: 기본급여~연차수당 합 (퇴직충당금 제외) · 요율: 국민연금 {set.rPension}% / 산재 {set.rAccident}% / 건강 {set.rHealth}% / 고용 {set.rEmploy}% / 장기요양 {set.rCare}% · 사업소세 = 건강보험 × {set.rBizTax}% (요율은 ⚙ 설정에서 관리)</div>
+        </table></div>}
+        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8}}>· 기준: 기본급여~연차수당 합 (퇴직충당금 제외) · 요율: 국민연금 {set.rPension}% / 산재 {set.rAccident}% / 건강 {set.rHealth}% / 고용 {set.rEmploy}% / 장기요양 {set.rCare}% · 사업소세 = 건강보험 × {set.rBizTax}% (요율은 ⚙ 설정에서 관리)</div>}
       </div>
 
-      {/* 4. 기타 비용 */}
+      {/* 4. 기타 비용 (직군별 개별 입력) */}
       <div style={card}>
-        <div style={secHd}><span style={secNo}>4</span><span style={secTt}>기타 비용 (인원별 적용)</span></div>
-        <div style={{fontSize:11.5,color:SUB,marginBottom:12}}>제경비·기타경비는 <b>1인당 단가</b>로 입력하면 각 직군 인원수만큼 자동 반영됩니다. (예: 시설 3명 → 3명분 적용) · 「야간전용」 항목은 야간근로가 있는 직군에만 적용됩니다.</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-          <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}><span style={{fontSize:13,fontWeight:700,color:INK}}>제경비 (1인당)</span><button style={bSm} onClick={addGen}>+ 행 추가</button></div>
-            <div style={tableWrap}><table style={tbl}>
-              <thead><tr><th style={thL}>항목</th><th style={thS}>1인당 단가</th><th style={thS}>수량</th><th style={thC}>야간전용</th><th style={thS}>1인당 금액</th><th style={thC}></th></tr></thead>
-              <tbody>{gen.map(function(g){
-                return <tr key={g.id}>
-                  <td style={tdL}><TxtInput w={104} value={g.nm} onChange={function(v){updGen(g.id,"nm",v);}} /></td>
-                  <td style={tdS}><NumInput w={84} value={g.unit} onChange={function(v){updGen(g.id,"unit",v);}} /></td>
-                  <td style={tdS}><NumInput w={46} value={g.qty} onChange={function(v){updGen(g.id,"qty",v);}} /></td>
-                  <td style={tdC}><input type="checkbox" checked={g.nightBased} onChange={function(e){updGen(g.id,"nightBased",e.target.checked);}} title="야간근로 직군에만 적용" /></td>
-                  <td style={Object.assign({},tdS,{fontWeight:600})}>{nf((Number(g.unit)||0)*(Number(g.qty)||0))}</td>
-                  <td style={tdC}><DelBtn onClick={function(){delGen(g.id);}} /></td>
-                </tr>;
-              })}</tbody>
-              <tfoot><tr><td style={tfL} colSpan="4">1인당 합계 (상시)</td><td style={tfR} colSpan="2">{nf(agg.genDayPer)}{agg.genNightPer>0?" (+야간 "+nf(agg.genNightPer)+")":""}</td></tr></tfoot>
-            </table></div>
+        <div style={secHd}><span style={secNo}>4</span><span style={secTt}>기타 비용 (직군별 개별 입력)</span></div>
+        <div style={{fontSize:11.5,color:SUB,marginBottom:12}}>각 직군마다 제경비·기타경비를 직접 입력합니다. 단가는 <b>1인당 기준</b>이며, 직군 인원수만큼 자동 적용됩니다. (행 추가/삭제 가능)</div>
+        {empty ? <div style={emptyBox}>① 인원을 추가하면 직군별 제경비·기타경비 입력란이 생성됩니다.</div> :
+        <div>
+          {rows.map(function(r,i){
+            var c=agg.calc[i];
+            return <div key={r.id} style={{border:"1px solid "+LINE,borderRadius:7,padding:12,marginBottom:10}}>
+              <div style={{fontSize:12.5,fontWeight:700,color:INK,marginBottom:10,paddingBottom:8,borderBottom:"1px solid "+LINE,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:6}}>
+                <span>{r.label||<span style={{color:SUB}}>(직군명)</span>} <span style={{color:SUB,fontWeight:400}}>× {r.count}명</span></span>
+                <span style={{fontWeight:400,color:SUB}}>1인당 기타 <b style={{color:INK}}>{won(c.etc)}</b> · 직군 합계 <b style={{color:BLUE}}>{won(c.rowEtc)}</b></span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}><span style={{fontSize:12,fontWeight:700,color:INK}}>제경비 (1인당)</span><button style={bSm} onClick={function(){addGenItem(r.id);}}>+ 행 추가</button></div>
+                  <table style={stbl}><thead><tr><th style={Object.assign({},thL,{fontSize:10.5})}>항목</th><th style={Object.assign({},thS,{fontSize:10.5})}>단가</th><th style={Object.assign({},thS,{fontSize:10.5})}>수량</th><th style={Object.assign({},thS,{fontSize:10.5})}>금액</th><th style={thC}></th></tr></thead>
+                    <tbody>{r.genItems.map(function(g){
+                      return <tr key={g.id}>
+                        <td style={tdL}><TxtInput w={104} value={g.nm} ph="예: 피복비" onChange={function(v){updGenItem(r.id,g.id,"nm",v);}} /></td>
+                        <td style={tdS}><NumInput w={82} value={g.unit} onChange={function(v){updGenItem(r.id,g.id,"unit",v);}} /></td>
+                        <td style={tdS}><NumInput w={42} value={g.qty} onChange={function(v){updGenItem(r.id,g.id,"qty",v);}} /></td>
+                        <td style={Object.assign({},tdS,{fontWeight:600})}>{nf((Number(g.unit)||0)*(Number(g.qty)||0))}</td>
+                        <td style={tdC}><DelBtn onClick={function(){delGenItem(r.id,g.id);}} /></td>
+                      </tr>;
+                    })}</tbody>
+                    <tfoot><tr><td style={tfL} colSpan="3">제경비 (1인당)</td><td style={tfR} colSpan="2">{nf(c.etcGenPer)}</td></tr></tfoot>
+                  </table>
+                </div>
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}><span style={{fontSize:12,fontWeight:700,color:INK}}>기타경비 (1인당)</span><button style={bSm} onClick={function(){addOthItem(r.id);}}>+ 행 추가</button></div>
+                  <table style={stbl}><thead><tr><th style={Object.assign({},thL,{fontSize:10.5})}>항목</th><th style={Object.assign({},thS,{fontSize:10.5})}>단가</th><th style={Object.assign({},thS,{fontSize:10.5})}>수량</th><th style={Object.assign({},thS,{fontSize:10.5})}>금액</th><th style={thC}></th></tr></thead>
+                    <tbody>{r.othItems.map(function(o){
+                      return <tr key={o.id}>
+                        <td style={tdL}><TxtInput w={104} value={o.nm} ph="예: 식대" onChange={function(v){updOthItem(r.id,o.id,"nm",v);}} /></td>
+                        <td style={tdS}><NumInput w={82} value={o.unit} onChange={function(v){updOthItem(r.id,o.id,"unit",v);}} /></td>
+                        <td style={tdS}><NumInput w={42} value={o.qty} onChange={function(v){updOthItem(r.id,o.id,"qty",v);}} /></td>
+                        <td style={Object.assign({},tdS,{fontWeight:600})}>{nf((Number(o.unit)||0)*(Number(o.qty)||0))}</td>
+                        <td style={tdC}><DelBtn onClick={function(){delOthItem(r.id,o.id);}} /></td>
+                      </tr>;
+                    })}</tbody>
+                    <tfoot><tr><td style={tfL} colSpan="3">기타경비 (1인당)</td><td style={tfR} colSpan="2">{nf(c.etcOthPer)}</td></tr></tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>;
+          })}
+          <div style={{display:"flex",justifyContent:"flex-end",padding:"10px 14px",background:BLUEL,borderRadius:6}}>
+            <span style={{fontSize:13,fontWeight:700,color:INK}}>기타 비용 총계 <span style={{color:BLUE}}>{won(agg.etcTotal)}</span></span>
           </div>
-          <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}><span style={{fontSize:13,fontWeight:700,color:INK}}>기타경비 (1인당)</span><button style={bSm} onClick={addOth}>+ 행 추가</button></div>
-            <div style={tableWrap}><table style={tbl}>
-              <thead><tr><th style={thL}>항목</th><th style={thS}>1인당 단가</th><th style={thS}>수량</th><th style={thS}>1인당 금액</th><th style={thC}></th></tr></thead>
-              <tbody>{oth.map(function(o){
-                return <tr key={o.id}>
-                  <td style={tdL}><TxtInput w={120} value={o.nm} onChange={function(v){updOth(o.id,"nm",v);}} /></td>
-                  <td style={tdS}><NumInput w={92} value={o.unit} onChange={function(v){updOth(o.id,"unit",v);}} /></td>
-                  <td style={tdS}><NumInput w={54} value={o.qty} onChange={function(v){updOth(o.id,"qty",v);}} /></td>
-                  <td style={Object.assign({},tdS,{fontWeight:600})}>{nf((Number(o.unit)||0)*(Number(o.qty)||0))}</td>
-                  <td style={tdC}><DelBtn onClick={function(){delOth(o.id);}} /></td>
-                </tr>;
-              })}</tbody>
-              <tfoot><tr><td style={tfL} colSpan="3">1인당 합계</td><td style={tfR} colSpan="2">{nf(agg.othPer)}</td></tr></tfoot>
-            </table></div>
-          </div>
-        </div>
-        <div style={{marginTop:14}}>
-          <div style={{fontSize:13,fontWeight:700,color:INK,marginBottom:9}}>직군별 적용 현황</div>
-          <div style={tableWrap}><table style={tbl}>
-            <thead><tr><th style={thL}>직군</th><th style={thS}>인원</th><th style={thS}>1인당 제경비</th><th style={thS}>1인당 기타경비</th><th style={thS}>1인당 소계</th><th style={thS}>직군 합계 (×인원)</th></tr></thead>
-            <tbody>{rows.map(function(r,i){
-              var c=agg.calc[i];
-              return <tr key={r.id}><NameCell label={r.label} count={r.count} /><td style={tdS}>{c.count}</td><td style={tdS}>{nf(c.etcGenPer)}</td><td style={tdS}>{nf(c.etcOthPer)}</td><td style={Object.assign({},tdS,{fontWeight:600})}>{nf(c.etc)}</td><td style={Object.assign({},tdS,{fontWeight:700,color:BLUE})}>{nf(c.rowEtc)}</td></tr>;
-            })}</tbody>
-            <tfoot><tr><td style={tfL}>기타 비용 소계</td><td style={tfR}>{agg.totalHead}</td><td style={tfR}></td><td style={tfR}></td><td style={tfR}></td><td style={tfR}>{nf(agg.etcTotal)}</td></tr></tfoot>
-          </table></div>
-        </div>
+        </div>}
       </div>
 
       {/* 5. 중계 */}
       <div style={card}>
         <div style={secHd}><span style={secNo}>5</span><span style={secTt}>중계 계산 (직접인건비 + 간접인건비 + 기타비용)</span></div>
+        {empty ? <div style={emptyBox}>① 인원을 먼저 추가하세요.</div> :
         <div style={tableWrap}><table style={tbl}>
           <thead><tr><th style={thL}>직군</th><th style={thS}>직접인건비</th><th style={thS}>간접인건비</th><th style={thS}>기타비용(1인)</th><th style={thS}>중계</th></tr></thead>
           <tbody>{rows.map(function(r,i){
@@ -423,18 +418,19 @@ function QuotationPage(){
             return <tr key={r.id}><NameCell label={r.label} count={r.count} /><td style={tdS}>{nf(c.directSum)}</td><td style={tdS}>{nf(c.indirectSum)}</td><td style={tdS}>{nf(c.etc)}</td><td style={Object.assign({},tdS,{fontWeight:700})}>{nf(c.junggye)}</td></tr>;
           })}</tbody>
           <tfoot><tr><td style={tfL}>합계</td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.directSum*c.count;},0))}</td><td style={tfR}>{nf(agg.totalIndirect)}</td><td style={tfR}>{nf(agg.etcTotal)}</td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.junggye*c.count;},0))}</td></tr></tfoot>
-        </table></div>
+        </table></div>}
       </div>
 
       {/* 6. 이윤 + 월간 합계 */}
       <div style={card}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:13}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:13,flexWrap:"wrap",gap:10}}>
           <div style={secHd}><span style={secNo}>6</span><span style={secTt}>이윤 · 월간 합계</span></div>
           <div style={{display:"flex",gap:14}}>
             <div><label style={lblS}>일반관리비 (%)</label><PctInput w={84} value={set.adminRate} onChange={function(v){updSet("adminRate",v);}} /></div>
             <div><label style={lblS}>기업이윤 (%)</label><PctInput w={84} value={set.profitRate} onChange={function(v){updSet("profitRate",v);}} /></div>
           </div>
         </div>
+        {empty ? <div style={emptyBox}>① 인원을 먼저 추가하세요.</div> :
         <div style={tableWrap}><table style={tbl}>
           <thead><tr><th style={thL}>직군</th><th style={thS}>중계</th><th style={thS}>일반관리비</th><th style={thS}>기업이윤</th><th style={thS}>부가세별도(1인)</th><th style={thS}>부가세포함(1인)</th><th style={thS}>인원</th><th style={thS}>행 합계(부가세별도)</th></tr></thead>
           <tbody>{rows.map(function(r,i){
@@ -445,12 +441,12 @@ function QuotationPage(){
             <tr><td style={tfL} colSpan="6">합계 (부가세 별도)</td><td style={tfR}>{agg.totalHead}</td><td style={tfR}>{nf(agg.totalExVat)}</td></tr>
             <tr><td style={tfL} colSpan="6">합계 (부가세 포함)</td><td style={tfR}>{agg.totalHead}</td><td style={tfR}>{nf(agg.totalInVat)}</td></tr>
           </tfoot>
-        </table></div>
-        <div style={{fontSize:11,color:SUB,marginTop:8}}>· 일반관리비 = 중계 × {set.adminRate}% (인원별) · 기업이윤 = (중계 + 일반관리비) × {set.profitRate}% (인원별) · 부가세포함 = 부가세별도 × {(100+Number(set.vat)).toFixed(0)}%</div>
+        </table></div>}
+        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8}}>· 일반관리비 = 중계 × {set.adminRate}% (인원별) · 기업이윤 = (중계 + 일반관리비) × {set.profitRate}% (인원별) · 부가세포함 = 부가세별도 × {(100+Number(set.vat)).toFixed(0)}%</div>}
       </div>
 
       {/* 시뮬레이션 */}
-      <div style={Object.assign({},card,{borderTop:"3px solid "+BLUE})}>
+      {!empty && <div style={Object.assign({},card,{borderTop:"3px solid "+BLUE})}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
           <span style={secTt}>견적 시뮬레이션 (±50%)</span>
           <span style={{fontSize:12,color:SUB}}>간접인건비 {won(agg.totalIndirect)} 는 조정 불가</span>
@@ -471,7 +467,7 @@ function QuotationPage(){
             {sim.perRow.map(function(p){
               var diff=p.newUnit-p.oldUnit;
               return <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,fontSize:12.5,padding:"8px 12px",background:"#fff",borderRadius:6,border:"1px solid "+LINE}}>
-                <span style={{fontWeight:600,minWidth:140}}>{p.label} <span style={{color:SUB}}>({p.count}명)</span></span>
+                <span style={{fontWeight:600,minWidth:140}}>{p.label||"(직군명)"} <span style={{color:SUB}}>({p.count}명)</span></span>
                 <span style={{color:SUB}}>1인당 {won(p.oldUnit)}</span><span style={{color:"#9aa4b0"}}>→</span>
                 <span style={{fontWeight:700,color:BLUE}}>{won(p.newUnit)}</span>
                 <span style={{fontSize:11,color:diff>=0?BLUE:WARN}}>({diff>=0?"+":""}{nf(diff)})</span>
@@ -488,15 +484,15 @@ function QuotationPage(){
           <button style={bDef} onClick={resetSim}>기준값으로 초기화</button>
           <button style={bPri} onClick={confirmSim}>이 단가로 확정</button>
         </div>
-      </div>
+      </div>}
 
       {/* 다운로드 */}
       <div style={Object.assign({},card,{display:"flex",justifyContent:"space-between",alignItems:"center"})}>
         <div>
           <div style={{fontSize:13.5,fontWeight:700,color:INK}}>견적서 엑셀 다운로드</div>
-          <div style={{fontSize:11.5,color:SUB,marginTop:3}}>{confirmed?"확정된 조정 단가로 출력됩니다.":"현재 산출된 기준 단가로 출력됩니다. (시뮬레이션 확정 시 조정 단가 반영)"}</div>
+          <div style={{fontSize:11.5,color:SUB,marginTop:3}}>{empty?"① 인원을 추가한 뒤 다운로드할 수 있습니다.":(confirmed?"확정된 조정 단가로 출력됩니다.":"현재 산출된 기준 단가로 출력됩니다. (시뮬레이션 확정 시 조정 단가 반영)")}</div>
         </div>
-        <button style={Object.assign({},bPri,{padding:"10px 20px"})} onClick={function(){qExportExcel(rows,gen,oth,set,agg,confirmed);doToast("견적서 엑셀이 생성되었습니다.");}}>⬇ 엑셀(.xls) 다운로드</button>
+        <button style={Object.assign({},bPri,{padding:"10px 20px",opacity:empty?0.5:1})} disabled={empty} onClick={function(){if(empty)return;qExportExcel(rows,set,agg,confirmed);doToast("견적서 엑셀이 생성되었습니다.");}}>⬇ 엑셀(.xls) 다운로드</button>
       </div>
 
       </div>{/* ── 메인 컬럼 끝 ── */}
@@ -518,6 +514,7 @@ function QuotationPage(){
           <div style={{marginBottom:16}}>
             <div style={grpTt}>최저임금</div>
             <div style={setRow}><span style={setLbl}>법정최저시급 (원)</span><NumInput w={86} value={draft.minWage} onChange={function(v){updDraft("minWage",v);}} /></div>
+            <div style={{fontSize:10,color:SUB,marginTop:2}}>· 2026년 적용: 10,320원</div>
           </div>
 
           <div style={{marginBottom:16}}>
