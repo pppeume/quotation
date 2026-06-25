@@ -773,8 +773,8 @@ try {
       accident = r10(directBase * s.rAccident / 100),
       health = r10(directBase * s.rHealth / 100),
       employ = r10(directBase * s.rEmploy / 100),
-      care = r10(directBase * s.rCare / 100),
-      bizTax = r10(health * s.rBizTax / 100); /* 간접인건비 = ROUND((기본급여~연차수당)×요율, -1) */
+      care = r10(health * s.rCare / 100),
+      bizTax = r10(directBase * s.rBizTax / 100); /* 장기요양=ROUND(건강보험×장기요양요율,-1) · 사업소세=ROUND((기본급여~연차수당)×사업소세요율,-1) */
     var indirectSum = pension + accident + health + employ + care + bizTax;
     /* 기타비용 — 직군 카탈로그 단가 × 수량 (1인당), 카탈로그 변경 시 자동 반영 */
     var ar = catalog && (catalog[r.area] || catalog[Object.keys(catalog)[0]]) || {
@@ -2020,7 +2020,7 @@ try {
         marginTop: 8,
         lineHeight: 1.7
       }
-    }, "\uD83D\uDD39 \uAE30\uC900: \uAE30\uBCF8\uAE09\uC5EC~\uC5F0\uCC28\uC218\uB2F9 \uD569 (\uD1F4\uC9C1\uCDA9\uB2F9\uAE08 \uC81C\uC678)", /*#__PURE__*/React.createElement("br", null), "\uD83D\uDD39 \uC694\uC728: \uAD6D\uBBFC\uC5F0\uAE08 ", set.rPension, "% / \uC0B0\uC7AC ", set.rAccident, "% / \uAC74\uAC15 ", set.rHealth, "% / \uACE0\uC6A9 ", set.rEmploy, "% / \uC7A5\uAE30\uC694\uC591 ", set.rCare, "%\u3000\uD83D\uDD39 \uC0AC\uC5C5\uC18C\uC138 = \uAC74\uAC15\uBCF4\uD5D8 \xD7 ", set.rBizTax, "% (\uC694\uC728\uC740 \u2699 \uC124\uC815\uC5D0\uC11C \uAD00\uB9AC)")), /*#__PURE__*/React.createElement("div", {
+    }, "\uD83D\uDD39 \uAD6D\uBBFC\uC5F0\uAE08\xB7\uC0B0\uC7AC\xB7\uAC74\uAC15\xB7\uACE0\uC6A9\xB7\uC0AC\uC5C5\uC18C\uC138 = ROUND((\uAE30\uBCF8\uAE09\uC5EC~\uC5F0\uCC28\uC218\uB2F9) \xD7 \uC694\uC728, -1)", /*#__PURE__*/React.createElement("br", null), "\uD83D\uDD39 \uAD6D\uBBFC\uC5F0\uAE08 ", set.rPension, "% / \uC0B0\uC7AC ", set.rAccident, "% / \uAC74\uAC15 ", set.rHealth, "% / \uACE0\uC6A9 ", set.rEmploy, "% / \uC0AC\uC5C5\uC18C\uC138 ", set.rBizTax, "%\u3000\uD83D\uDD39 \uC7A5\uAE30\uC694\uC591 = ROUND(\uAC74\uAC15\uBCF4\uD5D8 \uACC4\uC0B0\uAC12 \xD7 ", set.rCare, "%, -1) (\uC694\uC728\uC740 \u2699 \uC124\uC815\uC5D0\uC11C \uAD00\uB9AC)")), /*#__PURE__*/React.createElement("div", {
       style: card
     }, /*#__PURE__*/React.createElement("div", {
       style: secHd
@@ -3161,7 +3161,7 @@ try {
         marginTop: 4,
         lineHeight: 1.5
       }
-    }, "\uD83D\uDD39 \uAD6D\uBBFC\uC5F0\uAE08~\uC7A5\uAE30\uC694\uC591: \uAE30\uBCF8\uAE09\uC5EC~\uC5F0\uCC28\uC218\uB2F9 \uAE30\uC900", /*#__PURE__*/React.createElement("br", null), "\uD83D\uDD39 \uC0AC\uC5C5\uC18C\uC138: \uAC74\uAC15\uBCF4\uD5D8 \uAE30\uC900")), /*#__PURE__*/React.createElement("div", {
+    }, "\uD83D\uDD39 \uAD6D\uBBFC\uC5F0\uAE08\xB7\uC0B0\uC7AC\xB7\uAC74\uAC15\xB7\uACE0\uC6A9\xB7\uC0AC\uC5C5\uC18C\uC138: \uAE30\uBCF8\uAE09\uC5EC~\uC5F0\uCC28\uC218\uB2F9 \uAE30\uC900", /*#__PURE__*/React.createElement("br", null), "\uD83D\uDD39 \uC7A5\uAE30\uC694\uC591: \uAC74\uAC15\uBCF4\uD5D8 \uACC4\uC0B0\uAC12 \uAE30\uC900")), /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: 14
       }
@@ -3442,7 +3442,8 @@ try {
   eb.style.display = "block";
   eb.innerHTML = "<h2>앱 실행 오류</h2><pre>" + err.message + "\n" + err.stack + "</pre>";
 }
-}catch(err){var l=document.getElementById("loading");if(l)l.style.display="none";var eb=document.getElementById("error-box");eb.style.display="block";eb.innerHTML="<h2>앱 실행 오류</h2><pre>"+err.message+"\n"+err.stack+"</pre>";}
+}catch(err){var l=document.getElementById("loading");if(l)l.style.display="none";var eb=document.getElementById("error-box");eb.style.display="block";eb.innerHTML="<h2>앱 실행 오류</h2><pre>"+err.message+"
+"+err.stack+"</pre>";}
 </script>
 </body>
 </html>

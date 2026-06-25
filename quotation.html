@@ -159,7 +159,7 @@ function qCalcRow(r,s,catalog){
   var monthlyPay = directSum-retire-annual;
   var pension=r10(directBase*s.rPension/100), accident=r10(directBase*s.rAccident/100),
       health=r10(directBase*s.rHealth/100), employ=r10(directBase*s.rEmploy/100),
-      care=r10(directBase*s.rCare/100), bizTax=r10(health*s.rBizTax/100);  /* 간접인건비 = ROUND((기본급여~연차수당)×요율, -1) */
+      care=r10(health*s.rCare/100), bizTax=r10(directBase*s.rBizTax/100);  /* 장기요양=ROUND(건강보험×장기요양요율,-1) · 사업소세=ROUND((기본급여~연차수당)×사업소세요율,-1) */
   var indirectSum = pension+accident+health+employ+care+bizTax;
   /* 기타비용 — 직군 카탈로그 단가 × 수량 (1인당), 카탈로그 변경 시 자동 반영 */
   var ar=(catalog&&(catalog[r.area]||catalog[Object.keys(catalog)[0]]))||{gen:[],oth:[]};
@@ -437,7 +437,7 @@ function QuotationPage(){
           })}</tbody>
           <tfoot><tr><td style={tfL}>합계</td><td colSpan="6" style={tfR}></td><td style={tfR}>{nf(agg.totalIndirect)}</td></tr></tfoot>
         </table></div>}
-        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.7}}>🔹 기준: 기본급여~연차수당 합 (퇴직충당금 제외)<br/>🔹 요율: 국민연금 {set.rPension}% / 산재 {set.rAccident}% / 건강 {set.rHealth}% / 고용 {set.rEmploy}% / 장기요양 {set.rCare}%　🔹 사업소세 = 건강보험 × {set.rBizTax}% (요율은 ⚙ 설정에서 관리)</div>}
+        {!empty && <div style={{fontSize:11,color:SUB,marginTop:8,lineHeight:1.7}}>🔹 국민연금·산재·건강·고용·사업소세 = ROUND((기본급여~연차수당) × 요율, -1)<br/>🔹 국민연금 {set.rPension}% / 산재 {set.rAccident}% / 건강 {set.rHealth}% / 고용 {set.rEmploy}% / 사업소세 {set.rBizTax}%　🔹 장기요양 = ROUND(건강보험 계산값 × {set.rCare}%, -1) (요율은 ⚙ 설정에서 관리)</div>}
       </div>
 
       {/* 4. 기타 비용 (직군별 개별 입력) */}
@@ -675,7 +675,7 @@ function QuotationPage(){
             {[["rPension","국민연금"],["rAccident","산재보험"],["rHealth","건강보험"],["rEmploy","고용보험"],["rCare","장기요양"],["rBizTax","사업소세"]].map(function(f){
               return <div key={f[0]} style={setRow}><span style={setLbl}>{f[1]} (%)</span><PctInput w={86} value={draft[f[0]]} onChange={function(v){updDraft(f[0],v);}} /></div>;
             })}
-            <div style={{fontSize:10,color:SUB,marginTop:4,lineHeight:1.5}}>🔹 국민연금~장기요양: 기본급여~연차수당 기준<br/>🔹 사업소세: 건강보험 기준</div>
+            <div style={{fontSize:10,color:SUB,marginTop:4,lineHeight:1.5}}>🔹 국민연금·산재·건강·고용·사업소세: 기본급여~연차수당 기준<br/>🔹 장기요양: 건강보험 계산값 기준</div>
           </div>
 
           <div style={{marginBottom:14}}>
