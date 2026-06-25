@@ -851,51 +851,348 @@ try {
   }
 
   /* 엑셀(견적서 양식) 다운로드 — 외부 라이브러리 없이 .xls(HTML) 생성 */
-  function qExportExcel(rows, s, agg, catalog) {
-    var th = "border:1px solid #999;padding:5px 8px;background:#dbe5f1;font-weight:bold;text-align:center;";
-    var td = "border:1px solid #999;padding:5px 8px;text-align:right;";
-    var tdL = "border:1px solid #999;padding:5px 8px;text-align:left;";
-    var h = "<table style='border-collapse:collapse;font-family:맑은 고딕,Malgun Gothic;font-size:12px;'>";
-    h += "<tr><td colspan='12' style='font-size:20px;font-weight:bold;text-align:center;padding:14px;'>견  적  서</td></tr>";
-    h += "<tr><td colspan='12' style='text-align:right;padding:4px 8px;'>작성일: " + new Date().toISOString().slice(0, 10) + "</td></tr>";
-    h += "<tr><td colspan='12' style='padding:4px 8px;'>건명: 건물종합관리용역</td></tr>";
-    h += "<tr>" + ["직군/구분", "인원", "월급여", "직접인건비", "간접인건비", "기타비용", "중계", "일반관리비", "기업이윤", "1인 단가(부가세별도)", "행 합계(부가세별도)", "부가세포함"].map(function (x) {
-      return "<th style='" + th + "'>" + x + "</th>";
-    }).join("") + "</tr>";
+  function qExportExcel(rows, s, agg, catalog, title) {
+    var bd = "border:1px solid #888;";
+    var cH = bd + "background:#dbe5f1;font-weight:bold;text-align:center;padding:4px 6px;";
+    var cL = bd + "text-align:left;padding:3px 6px;";
+    var cN = bd + "text-align:right;padding:3px 6px;";
+    var cSub = bd + "text-align:right;padding:3px 6px;background:#eef4fb;font-weight:bold;";
+    var cTot = bd + "text-align:right;padding:3px 6px;background:#fff2cc;font-weight:bold;";
+    function fmt(v) {
+      return !v || v === 0 ? "-" : nf(v);
+    }
+    /* area 그룹별 직군 정렬 */
+    var groups = [];
+    Object.keys(catalog).forEach(function (a) {
+      var idx = [];
+      rows.forEach(function (r, i) {
+        if (r.area === a) idx.push(i);
+      });
+      if (idx.length) groups.push({
+        nm: a,
+        idx: idx
+      });
+    });
+    var seen = {};
+    groups.forEach(function (g) {
+      g.idx.forEach(function (i) {
+        seen[i] = 1;
+      });
+    });
+    var rest = [];
     rows.forEach(function (r, i) {
-      var c = agg.calc[i];
-      var unit = c.exVat;
-      var rowSum = unit * c.count;
-      h += "<tr><td style='" + tdL + "'>" + (r.label || "(직군명)") + "</td><td style='" + td + "'>" + c.count + "</td><td style='" + td + "'>" + nf(c.monthlyPay) + "</td><td style='" + td + "'>" + nf(c.directSum) + "</td><td style='" + td + "'>" + nf(c.indirectSum) + "</td><td style='" + td + "'>" + nf(c.etc) + "</td><td style='" + td + "'>" + nf(c.junggye) + "</td><td style='" + td + "'>" + nf(c.admin) + "</td><td style='" + td + "'>" + nf(c.profit) + "</td><td style='" + td + "'>" + nf(unit) + "</td><td style='" + td + "'>" + nf(rowSum) + "</td><td style='" + td + "'>" + nf(r0(rowSum * (1 + s.vat / 100))) + "</td></tr>";
+      if (!seen[i]) rest.push(i);
     });
-    var gExVat = agg.totalExVat;
-    h += "<tr><td colspan='10' style='" + th + "text-align:right;'>합계 (부가세 별도)</td><td colspan='2' style='" + td + "font-weight:bold;'>" + nf(gExVat) + "</td></tr>";
-    h += "<tr><td colspan='10' style='" + th + "text-align:right;'>합계 (부가세 포함)</td><td colspan='2' style='" + td + "font-weight:bold;'>" + nf(r0(gExVat * (1 + s.vat / 100))) + "</td></tr></table>";
-    h += "<br/><table style='border-collapse:collapse;font-family:맑은 고딕;font-size:12px;'><tr><td colspan='5' style='font-weight:bold;padding:6px;'>[ 기타비용 내역 (직군별, 1인당 단가) ]</td></tr>";
-    h += "<tr><th style='" + th + "'>직군</th><th style='" + th + "'>구분</th><th style='" + th + "'>항목</th><th style='" + th + "'>단가 × 수량</th><th style='" + th + "'>1인당 금액</th></tr>";
-    rows.forEach(function (r) {
-      var ar = catalog && (catalog[r.area] || catalog[Object.keys(catalog)[0]]) || {
-        gen: [],
-        oth: []
-      };
-      (r.genItems || []).forEach(function (g) {
-        var u = qUnit(ar.gen, g.nm);
-        h += "<tr><td style='" + tdL + "'>" + (r.label || "") + "</td><td style='" + tdL + "'>제경비</td><td style='" + tdL + "'>" + (g.nm || "") + "</td><td style='" + td + "'>" + nf(u) + " × " + (Number(g.qty) || 0) + "</td><td style='" + td + "'>" + nf(u * (Number(g.qty) || 0)) + "</td></tr>";
-      });
-      (r.othItems || []).forEach(function (o) {
-        var u = qUnit(ar.oth, o.nm);
-        h += "<tr><td style='" + tdL + "'>" + (r.label || "") + "</td><td style='" + tdL + "'>기타경비</td><td style='" + tdL + "'>" + (o.nm || "") + "</td><td style='" + td + "'>" + nf(u) + " × " + (Number(o.qty) || 0) + "</td><td style='" + td + "'>" + nf(u * (Number(o.qty) || 0)) + "</td></tr>";
-      });
+    if (rest.length) groups.push({
+      nm: "기타",
+      idx: rest
     });
-    h += "</table>";
-    var html = "<html><head><meta charset='UTF-8'></head><body>" + h + "</body></html>";
+    var totalCols = 0;
+    groups.forEach(function (g) {
+      totalCols += g.idx.length + 1;
+    });
+    var vat = Number(s.vat) || 0;
+    /* 행 정의 */
+    var ROWS = [{
+      cat: "근무·급여",
+      label: "인 원",
+      type: "count"
+    }, {
+      cat: "근무·급여",
+      label: "월 급 여",
+      type: "money",
+      fn: function (c) {
+        return c.monthlyPay;
+      }
+    }, {
+      cat: "근무·급여",
+      label: "월근무시간",
+      type: "unit",
+      fn: function (c) {
+        return c.baseHours;
+      }
+    }, {
+      cat: "근무·급여",
+      label: "소정근로시간",
+      type: "unit",
+      fn: function (c) {
+        return c.stdHours;
+      }
+    }, {
+      cat: "근무·급여",
+      label: "연장시간",
+      type: "unit",
+      fn: function (c, r) {
+        return r.otApply ? Number(r.otHours) || 0 : 0;
+      }
+    }, {
+      cat: "근무·급여",
+      label: "야간시간",
+      type: "unit",
+      fn: function (c, r) {
+        return r.ntApply ? Number(r.ntHours) || 0 : 0;
+      }
+    }, {
+      cat: "근무·급여",
+      label: "시 간 급",
+      type: "unit",
+      fn: function (c) {
+        return c.hourly;
+      },
+      basis: "2026년 최저시급 이상"
+    }, {
+      cat: "근무·급여",
+      label: "통상임금(시급)",
+      type: "unit",
+      fn: function (c) {
+        return c.common;
+      },
+      basis: "(기본급여+직책수당)/기본시간"
+    }, {
+      cat: "직접인건비",
+      label: "기본급여",
+      type: "money",
+      fn: function (c, r) {
+        return Number(r.basic) || 0;
+      }
+    }, {
+      cat: "직접인건비",
+      label: "직책/자격수당",
+      type: "money",
+      fn: function (c, r) {
+        return (Number(r.posPay) || 0) + (Number(r.qualPay) || 0);
+      }
+    }, {
+      cat: "직접인건비",
+      label: "연장근로수당",
+      type: "money",
+      fn: function (c) {
+        return c.ot;
+      },
+      basis: "ROUND((통상시급×소정근로시간)×연장시간/12,-1)"
+    }, {
+      cat: "직접인건비",
+      label: "야간근로수당",
+      type: "money",
+      fn: function (c) {
+        return c.nt;
+      },
+      basis: "ROUND(야간시간×통상시급×0.5,-1)"
+    }, {
+      cat: "직접인건비",
+      label: "연차수당",
+      type: "money",
+      fn: function (c) {
+        return c.annual;
+      },
+      basis: "ROUND(소정근로시간×통상시급×연차일/12,-1) · 10일"
+    }, {
+      cat: "직접인건비",
+      label: "퇴직충당금",
+      type: "money",
+      fn: function (c) {
+        return c.retire;
+      },
+      basis: "ROUND(소계/12,-1)"
+    }, {
+      cat: "직접인건비",
+      label: "소계",
+      type: "money",
+      fn: function (c) {
+        return c.directSum;
+      },
+      bold: true
+    }, {
+      cat: "간접인건비",
+      label: "국민연금",
+      type: "money",
+      fn: function (c) {
+        return c.pension;
+      },
+      basis: "(기본+수당~연차)×" + s.rPension + "%"
+    }, {
+      cat: "간접인건비",
+      label: "산재보험",
+      type: "money",
+      fn: function (c) {
+        return c.accident;
+      },
+      basis: "(기본+수당~연차)×" + s.rAccident + "%"
+    }, {
+      cat: "간접인건비",
+      label: "건강보험",
+      type: "money",
+      fn: function (c) {
+        return c.health;
+      },
+      basis: "(기본+수당~연차)×" + s.rHealth + "%"
+    }, {
+      cat: "간접인건비",
+      label: "고용보험",
+      type: "money",
+      fn: function (c) {
+        return c.employ;
+      },
+      basis: "(기본+수당~연차)×" + s.rEmploy + "%"
+    }, {
+      cat: "간접인건비",
+      label: "장기요양",
+      type: "money",
+      fn: function (c) {
+        return c.care;
+      },
+      basis: "(건강보험)×" + s.rCare + "%"
+    }, {
+      cat: "간접인건비",
+      label: "사업소세",
+      type: "money",
+      fn: function (c) {
+        return c.bizTax;
+      },
+      basis: "(기본+수당~연차)×" + s.rBizTax + "%"
+    }, {
+      cat: "간접인건비",
+      label: "소계",
+      type: "money",
+      fn: function (c) {
+        return c.indirectSum;
+      },
+      bold: true
+    }, {
+      cat: "기타비용",
+      label: "제경비",
+      type: "money",
+      fn: function (c) {
+        return c.etcGenPer;
+      }
+    }, {
+      cat: "기타비용",
+      label: "기타경비",
+      type: "money",
+      fn: function (c) {
+        return c.etcOthPer;
+      }
+    }, {
+      cat: "기타비용",
+      label: "소계",
+      type: "money",
+      fn: function (c) {
+        return c.etc;
+      },
+      bold: true
+    }, {
+      cat: "",
+      label: "중      계",
+      type: "money",
+      fn: function (c) {
+        return c.junggye;
+      },
+      bold: true
+    }, {
+      cat: "",
+      label: "일반관리비",
+      type: "money",
+      fn: function (c) {
+        return c.admin;
+      },
+      basis: "중계×" + s.adminRate + "%"
+    }, {
+      cat: "",
+      label: "기업이윤",
+      type: "money",
+      fn: function (c) {
+        return c.profit;
+      },
+      basis: "(중계+일반관리비)×" + s.profitRate + "%"
+    }, {
+      cat: "",
+      label: "월간합계(부가세 별도)",
+      type: "money",
+      fn: function (c) {
+        return c.exVat;
+      },
+      bold: true
+    }, {
+      cat: "",
+      label: "월간합계(부가세 포함)",
+      type: "money",
+      fn: function (c) {
+        return c.inVat;
+      },
+      bold: true,
+      basis: "부가세별도×" + (100 + vat) + "%"
+    }];
+    function bodyCells(d) {
+      var h = "";
+      groups.forEach(function (g) {
+        g.idx.forEach(function (i) {
+          var c = agg.calc[i],
+            r = rows[i];
+          var st = cN + (d.bold ? "font-weight:bold;" : "");
+          var val = d.type === "count" ? c.count || "-" : fmt(d.fn(c, r));
+          h += "<td style='" + st + "'>" + val + "</td>";
+        });
+        var sv = d.type === "count" ? g.idx.reduce(function (a, i) {
+          return a + agg.calc[i].count;
+        }, 0) : d.type === "unit" ? null : g.idx.reduce(function (a, i) {
+          return a + d.fn(agg.calc[i], rows[i]) * agg.calc[i].count;
+        }, 0);
+        h += "<td style='" + cSub + "'>" + (sv == null ? "" : fmt(sv)) + "</td>";
+      });
+      var tv = d.type === "count" ? agg.totalHead : d.type === "unit" ? null : agg.calc.reduce(function (a, c, i) {
+        return a + d.fn(c, rows[i]) * c.count;
+      }, 0);
+      h += "<td style='" + cTot + "'>" + (tv == null ? "" : fmt(tv)) + "</td>";
+      h += "<td style='" + cL + "font-size:10px;color:#555;'>" + (d.basis || "") + "</td>";
+      return h;
+    }
+    var span = 2 + totalCols + 2;
+    var H = "<table style='border-collapse:collapse;font-family:맑은 고딕,Malgun Gothic;font-size:11px;'>";
+    H += "<tr><td colspan='" + span + "' style='font-size:17px;font-weight:bold;text-align:center;padding:10px;" + bd + "'>" + (title || "건물종합관리용역").replace(/</g, "&lt;") + " 용역 산출 내역서</td></tr>";
+    H += "<tr><td colspan='" + span + "' style='text-align:right;padding:3px 6px;" + bd + "'>작성일: " + new Date().toISOString().slice(0, 10) + "　(단위: 원 / 월)</td></tr>";
+    /* 헤더 2단 */
+    H += "<tr><td colspan='2' rowspan='2' style='" + cH + "'>구  분</td>";
+    groups.forEach(function (g) {
+      H += "<td colspan='" + (g.idx.length + 1) + "' style='" + cH + "'>" + g.nm + "</td>";
+    });
+    H += "<td rowspan='2' style='" + cH + "'>합계(월간)</td><td rowspan='2' style='" + cH + "'>산정기준</td></tr>";
+    H += "<tr>";
+    groups.forEach(function (g) {
+      g.idx.forEach(function (i) {
+        H += "<td style='" + cH + "'>" + (rows[i].label || "(직군)").replace(/</g, "&lt;") + "</td>";
+      });
+      H += "<td style='" + cH + "background:#cfe0f0;'>소계</td>";
+    });
+    H += "</tr>";
+    /* 본문 (대분류 세로 병합) */
+    var catCnt = {};
+    ROWS.forEach(function (d) {
+      if (d.cat) catCnt[d.cat] = (catCnt[d.cat] || 0) + 1;
+    });
+    var catSeen = {};
+    ROWS.forEach(function (d) {
+      H += "<tr>";
+      if (d.cat) {
+        if (!catSeen[d.cat]) {
+          catSeen[d.cat] = 1;
+          H += "<td rowspan='" + catCnt[d.cat] + "' style='" + cH + "'>" + d.cat + "</td>";
+        }
+        H += "<td style='" + cL + "font-weight:bold;'>" + d.label + "</td>";
+      } else {
+        H += "<td colspan='2' style='" + cL + "font-weight:bold;background:#f2f2f2;'>" + d.label + "</td>";
+      }
+      H += bodyCells(d);
+      H += "</tr>";
+    });
+    H += "</table>";
+    var html = "<html><head><meta charset='UTF-8'></head><body>" + H + "</body></html>";
     var blob = new Blob(["﻿", html], {
       type: "application/vnd.ms-excel;charset=utf-8"
     });
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
-    a.download = "견적서_" + new Date().toISOString().slice(0, 10) + ".xls";
+    a.download = (title || "견적서").replace(/[\\/:*?\"<>|]/g, "_") + "_산출내역서_" + new Date().toISOString().slice(0, 10) + ".xls";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -3040,7 +3337,7 @@ try {
       disabled: empty,
       onClick: function () {
         if (empty) return;
-        qExportExcel(rows, set, agg, catalog);
+        qExportExcel(rows, set, agg, catalog, title);
         doToast("견적서 엑셀이 생성되었습니다.");
       }
     }, "\u2B07 \uC5D1\uC140(.xls) \uB2E4\uC6B4\uB85C\uB4DC"))), /*#__PURE__*/React.createElement("aside", {
