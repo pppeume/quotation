@@ -115,11 +115,14 @@ function saveHistLS(h){ try{ if(window.localStorage) localStorage.setItem("quota
 /* 직군 구분 및 직군별 단가 카탈로그 */
 var Q_AREAS=["시설","미화","보안","식음"];
 function defCatalog(){
-  var gen=[{nm:"피복비",unit:120000},{nm:"특수검진비",unit:80000},{nm:"선물비",unit:100000},{nm:"운영비",unit:50000}];
-  var oth=[{nm:"명절선물",unit:100000},{nm:"법정교육비",unit:30000},{nm:"수수료",unit:30000},{nm:"식대",unit:220000}];
-  var c={};
-  Q_AREAS.forEach(function(a){ c[a]={gen:gen.map(function(x){return {id:uid("cg"),nm:x.nm,unit:x.unit};}),oth:oth.map(function(x){return {id:uid("co"),nm:x.nm,unit:x.unit};})}; });
-  return c;
+  function g(nm,unit){return {id:uid("cg"),nm:nm,unit:unit};}
+  function o(nm,unit){return {id:uid("co"),nm:nm,unit:unit};}
+  return {
+    "시설":{gen:[g("피복비",30000),g("특수검진비",5667),g("선물비",15000),g("운영비",40000)],oth:[o("수수료",71267),o("식대",0)]},
+    "미화":{gen:[g("피복비",20000),g("선물비",15000),g("운영비",40000)],oth:[o("수수료",71267),o("식대",0)]},
+    "보안":{gen:[g("피복비",40000),g("특수검진비",6375),g("선물비",15000),g("운영비",40000)],oth:[o("수수료",71267),o("식대",0)]},
+    "식음":{gen:[g("피복비",20000),g("선물비",15000),g("운영비",40000)],oth:[o("수수료",71267),o("식대",0)]}
+  };
 }
 
 /* 새 인원(직군) 행 — 인원 추가 시 제경비·기타경비 1줄씩 자동 생성 */
