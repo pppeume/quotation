@@ -855,16 +855,9 @@ try {
 
   /* 엑셀(견적서 양식) 다운로드 — 외부 라이브러리 없이 .xls(HTML) 생성 */
   function qExportExcel(rows, s, agg, catalog, title) {
-    var bd = "border:1px solid #888;";
-    var cH = bd + "background:#dbe5f1;font-weight:bold;text-align:center;padding:4px 6px;";
-    var cL = bd + "text-align:left;padding:3px 6px;";
-    var cN = bd + "text-align:right;padding:3px 6px;";
-    var cSub = bd + "text-align:right;padding:3px 6px;background:#eef4fb;font-weight:bold;";
-    var cTot = bd + "text-align:right;padding:3px 6px;background:#fff2cc;font-weight:bold;";
-    function fmt(v) {
-      return !v || v === 0 ? "-" : nf(v);
+    function esc(t) {
+      return String(t == null ? "" : t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
     }
-    /* area 그룹별 직군 정렬 */
     var groups = [];
     Object.keys(catalog).forEach(function (a) {
       var idx = [];
@@ -890,306 +883,367 @@ try {
       nm: "기타",
       idx: rest
     });
-    var totalCols = 0;
+    var colMap = [{
+      t: "gubun"
+    }];
     groups.forEach(function (g) {
-      totalCols += g.idx.length + 1;
+      g.idx.forEach(function (i) {
+        colMap.push({
+          t: "job",
+          i: i
+        });
+      });
+      colMap.push({
+        t: "sub",
+        n: g.idx.length
+      });
     });
-    var vat = Number(s.vat) || 0;
-    /* 행 정의 */
+    colMap.push({
+      t: "total"
+    });
+    colMap.push({
+      t: "basis"
+    });
+    colMap.forEach(function (c, k) {
+      c.col = k + 1;
+    });
+    var totalCol,
+      subCols = [];
+    colMap.forEach(function (c) {
+      if (c.t === "total") totalCol = c.col;
+      if (c.t === "sub") subCols.push(c.col);
+    });
+    var ncols = colMap.length,
+      PR = 3;
+    var rP = (Number(s.rPension) || 0) / 100,
+      rA = (Number(s.rAccident) || 0) / 100,
+      rH = (Number(s.rHealth) || 0) / 100,
+      rE = (Number(s.rEmploy) || 0) / 100,
+      rC = (Number(s.rCare) || 0) / 100,
+      rB = (Number(s.rBizTax) || 0) / 100;
+    var adm = (Number(s.adminRate) || 0) / 100,
+      prf = (Number(s.profitRate) || 0) / 100,
+      vm = 1 + (Number(s.vat) || 0) / 100,
+      vat = Number(s.vat) || 0;
+    /* 행 정의: kind(count/unit/money), val(표시·집계값), f(R1C1 수식) */
     var ROWS = [{
-      cat: "근무·급여",
-      label: "인 원",
-      type: "count"
-    }, {
-      cat: "근무·급여",
-      label: "월 급 여",
-      type: "money",
-      fn: function (c) {
-        return c.monthlyPay;
+      lbl: "인 원",
+      kind: "count",
+      val: function (c) {
+        return c.count;
       }
     }, {
-      cat: "근무·급여",
-      label: "월근무시간",
-      type: "unit",
-      fn: function (c) {
+      lbl: "월 급 여",
+      kind: "money",
+      val: function (c) {
+        return c.monthlyPay;
+      },
+      f: function () {
+        return "=R[13]C-R[12]C-R[11]C";
+      }
+    }, {
+      lbl: "월근무시간",
+      kind: "unit",
+      val: function (c) {
         return c.baseHours;
       }
     }, {
-      cat: "근무·급여",
-      label: "소정근로시간",
-      type: "unit",
-      fn: function (c) {
+      lbl: "소정근로시간",
+      kind: "unit",
+      val: function (c) {
         return c.stdHours;
       }
     }, {
-      cat: "근무·급여",
-      label: "연장시간",
-      type: "unit",
-      fn: function (c, r) {
+      lbl: "연장시간",
+      kind: "unit",
+      val: function (c, r) {
         return r.otApply ? Number(r.otHours) || 0 : 0;
       }
     }, {
-      cat: "근무·급여",
-      label: "야간시간",
-      type: "unit",
-      fn: function (c, r) {
+      lbl: "야간시간",
+      kind: "unit",
+      val: function (c, r) {
         return r.ntApply ? Number(r.ntHours) || 0 : 0;
       }
     }, {
-      cat: "근무·급여",
-      label: "시 간 급",
-      type: "unit",
-      fn: function (c) {
+      lbl: "시 간 급",
+      kind: "unit",
+      val: function (c) {
         return c.hourly;
       },
-      basis: "2026년 최저시급 이상"
+      f: function () {
+        return "=ROUND(R[2]C/R[-4]C,0)";
+      },
+      basis: "기본급여/월근무시간"
     }, {
-      cat: "근무·급여",
-      label: "통상임금(시급)",
-      type: "unit",
-      fn: function (c) {
+      lbl: "통상임금(시급)",
+      kind: "unit",
+      val: function (c) {
         return c.common;
       },
-      basis: "(기본급여+직책수당)/기본시간"
+      f: function () {
+        return "=ROUND((R[1]C+R[2]C)/R[-5]C,0)";
+      },
+      basis: "(기본급여+직책수당)/월근무시간"
     }, {
-      cat: "직접인건비",
-      label: "기본급여",
-      type: "money",
-      fn: function (c, r) {
+      lbl: "기본급여",
+      kind: "money",
+      val: function (c, r) {
         return Number(r.basic) || 0;
       }
     }, {
-      cat: "직접인건비",
-      label: "직책/자격수당",
-      type: "money",
-      fn: function (c, r) {
+      lbl: "직책/자격수당",
+      kind: "money",
+      val: function (c, r) {
         return (Number(r.posPay) || 0) + (Number(r.qualPay) || 0);
       }
     }, {
-      cat: "직접인건비",
-      label: "연장근로수당",
-      type: "money",
-      fn: function (c) {
+      lbl: "연장근로수당",
+      kind: "money",
+      val: function (c) {
         return c.ot;
       },
-      basis: "ROUND((통상시급×소정근로시간)×연장시간/12,-1)"
+      f: function () {
+        return "=ROUND((R[-3]C*R[-7]C)*R[-6]C/12,-1)";
+      },
+      basis: "ROUND((통상시급*소정근로시간)*연장시간/12,-1)"
     }, {
-      cat: "직접인건비",
-      label: "야간근로수당",
-      type: "money",
-      fn: function (c) {
+      lbl: "야간근로수당",
+      kind: "money",
+      val: function (c) {
         return c.nt;
       },
-      basis: "ROUND(야간시간×통상시급×0.5,-1)"
+      f: function () {
+        return "=ROUND(R[-6]C*R[-4]C*0.5,-1)";
+      },
+      basis: "ROUND(야간시간*통상시급*0.5,-1)"
     }, {
-      cat: "직접인건비",
-      label: "연차수당",
-      type: "money",
-      fn: function (c) {
+      lbl: "연차수당",
+      kind: "money",
+      val: function (c) {
         return c.annual;
       },
-      basis: "ROUND(소정근로시간×통상시급×연차일/12,-1) · 10일"
+      f: function (r) {
+        return "=ROUND(R[-9]C*R[-5]C*" + (Number(r.annualDays) || 0) + "/12,-1)";
+      },
+      basis: "ROUND(소정*통상시급*연차일/12,-1)"
     }, {
-      cat: "직접인건비",
-      label: "퇴직충당금",
-      type: "money",
-      fn: function (c) {
+      lbl: "퇴직충당금",
+      kind: "money",
+      val: function (c) {
         return c.retire;
       },
-      basis: "ROUND(소계/12,-1)"
+      f: function () {
+        return "=ROUND(SUM(R[-5]C:R[-1]C)/12,-1)";
+      },
+      basis: "ROUND(SUM(기본급여:연차수당)/12,-1)"
     }, {
-      cat: "직접인건비",
-      label: "소계",
-      type: "money",
-      fn: function (c) {
+      lbl: "직접인건비 소계",
+      kind: "money",
+      val: function (c) {
         return c.directSum;
       },
-      bold: true
+      f: function () {
+        return "=SUM(R[-6]C:R[-1]C)";
+      }
     }, {
-      cat: "간접인건비",
-      label: "국민연금",
-      type: "money",
-      fn: function (c) {
+      lbl: "국민연금",
+      kind: "money",
+      val: function (c) {
         return c.pension;
       },
-      basis: "(기본+수당~연차)×" + s.rPension + "%"
+      f: function () {
+        return "=ROUND(SUM(R[-7]C:R[-3]C)*" + rP + ",-1)";
+      },
+      basis: "(기본+수당~연차)*" + s.rPension + "%"
     }, {
-      cat: "간접인건비",
-      label: "산재보험",
-      type: "money",
-      fn: function (c) {
+      lbl: "산재보험",
+      kind: "money",
+      val: function (c) {
         return c.accident;
       },
-      basis: "(기본+수당~연차)×" + s.rAccident + "%"
+      f: function () {
+        return "=ROUND(SUM(R[-8]C:R[-4]C)*" + rA + ",-1)";
+      },
+      basis: "*" + s.rAccident + "%"
     }, {
-      cat: "간접인건비",
-      label: "건강보험",
-      type: "money",
-      fn: function (c) {
+      lbl: "건강보험",
+      kind: "money",
+      val: function (c) {
         return c.health;
       },
-      basis: "(기본+수당~연차)×" + s.rHealth + "%"
+      f: function () {
+        return "=ROUND(SUM(R[-9]C:R[-5]C)*" + rH + ",-1)";
+      },
+      basis: "*" + s.rHealth + "%"
     }, {
-      cat: "간접인건비",
-      label: "고용보험",
-      type: "money",
-      fn: function (c) {
+      lbl: "고용보험",
+      kind: "money",
+      val: function (c) {
         return c.employ;
       },
-      basis: "(기본+수당~연차)×" + s.rEmploy + "%"
+      f: function () {
+        return "=ROUND(SUM(R[-10]C:R[-6]C)*" + rE + ",-1)";
+      },
+      basis: "*" + s.rEmploy + "%"
     }, {
-      cat: "간접인건비",
-      label: "장기요양",
-      type: "money",
-      fn: function (c) {
+      lbl: "장기요양",
+      kind: "money",
+      val: function (c) {
         return c.care;
       },
-      basis: "(건강보험)×" + s.rCare + "%"
+      f: function () {
+        return "=ROUND(R[-2]C*" + rC + ",-1)";
+      },
+      basis: "건강보험*" + s.rCare + "%"
     }, {
-      cat: "간접인건비",
-      label: "사업소세",
-      type: "money",
-      fn: function (c) {
+      lbl: "사업소세",
+      kind: "money",
+      val: function (c) {
         return c.bizTax;
       },
-      basis: "(기본+수당~연차)×" + s.rBizTax + "%"
+      f: function () {
+        return "=ROUND(SUM(R[-12]C:R[-8]C)*" + rB + ",-1)";
+      },
+      basis: "(기본+수당~연차)*" + s.rBizTax + "%"
     }, {
-      cat: "간접인건비",
-      label: "소계",
-      type: "money",
-      fn: function (c) {
+      lbl: "간접인건비 소계",
+      kind: "money",
+      val: function (c) {
         return c.indirectSum;
       },
-      bold: true
+      f: function () {
+        return "=SUM(R[-6]C:R[-1]C)";
+      }
     }, {
-      cat: "기타비용",
-      label: "제경비",
-      type: "money",
-      fn: function (c) {
+      lbl: "제경비",
+      kind: "money",
+      val: function (c) {
         return c.etcGenPer;
       }
     }, {
-      cat: "기타비용",
-      label: "기타경비",
-      type: "money",
-      fn: function (c) {
+      lbl: "기타경비",
+      kind: "money",
+      val: function (c) {
         return c.etcOthPer;
       }
     }, {
-      cat: "기타비용",
-      label: "소계",
-      type: "money",
-      fn: function (c) {
+      lbl: "기타비용 소계",
+      kind: "money",
+      val: function (c) {
         return c.etc;
       },
-      bold: true
+      f: function () {
+        return "=SUM(R[-2]C:R[-1]C)";
+      }
     }, {
-      cat: "",
-      label: "중      계",
-      type: "money",
-      fn: function (c) {
+      lbl: "중      계",
+      kind: "money",
+      val: function (c) {
         return c.junggye;
       },
-      bold: true
+      f: function () {
+        return "=R[-11]C+R[-4]C+R[-1]C";
+      }
     }, {
-      cat: "",
-      label: "일반관리비",
-      type: "money",
-      fn: function (c) {
+      lbl: "일반관리비",
+      kind: "money",
+      val: function (c) {
         return c.admin;
       },
-      basis: "중계×" + s.adminRate + "%"
+      f: function () {
+        return "=ROUND(R[-1]C*" + adm + ",0)";
+      },
+      basis: "중계*" + s.adminRate + "%"
     }, {
-      cat: "",
-      label: "기업이윤",
-      type: "money",
-      fn: function (c) {
+      lbl: "기업이윤",
+      kind: "money",
+      val: function (c) {
         return c.profit;
       },
-      basis: "(중계+일반관리비)×" + s.profitRate + "%"
+      f: function () {
+        return "=ROUND((R[-2]C+R[-1]C)*" + prf + ",0)";
+      },
+      basis: "(중계+일반관리비)*" + s.profitRate + "%"
     }, {
-      cat: "",
-      label: "월간합계(부가세 별도)",
-      type: "money",
-      fn: function (c) {
+      lbl: "월간합계(부가세 별도)",
+      kind: "money",
+      val: function (c) {
         return c.exVat;
       },
-      bold: true
+      f: function () {
+        return "=ROUND(R[-3]C+R[-2]C+R[-1]C,-3)";
+      },
+      basis: "ROUND(중계+관리비+이윤,-3)"
     }, {
-      cat: "",
-      label: "월간합계(부가세 포함)",
-      type: "money",
-      fn: function (c) {
+      lbl: "월간합계(부가세 포함)",
+      kind: "money",
+      val: function (c) {
         return c.inVat;
       },
-      bold: true,
-      basis: "부가세별도×" + (100 + vat) + "%"
+      f: function () {
+        return "=ROUND(R[-1]C*" + vm + ",0)";
+      },
+      basis: "부가세별도*" + (100 + vat) + "%"
     }];
-    function bodyCells(d) {
-      var h = "";
+    function cN(st, val, fml) {
+      return "<Cell ss:StyleID=\"" + st + "\"" + (fml ? " ss:Formula=\"" + esc(fml) + "\"" : "") + "><Data ss:Type=\"Number\">" + Math.round(Number(val) || 0) + "</Data></Cell>";
+    }
+    function cS(st, txt, merge) {
+      return "<Cell ss:StyleID=\"" + st + "\"" + (merge ? " ss:MergeAcross=\"" + merge + "\"" : "") + "><Data ss:Type=\"String\">" + esc(txt) + "</Data></Cell>";
+    }
+    function cE(st) {
+      return "<Cell ss:StyleID=\"" + st + "\"/>";
+    }
+    var body = "";
+    body += "<Row ss:Height=\"26\">" + cS("t", (title || "건물종합관리용역") + " 용역 산출 내역서", ncols - 1) + "</Row>";
+    var hd = "<Row>" + cS("h", "구  분");
+    groups.forEach(function (g) {
+      g.idx.forEach(function (i) {
+        hd += cS("h", rows[i].label || "(직군)");
+      });
+      hd += cS("h", "소계");
+    });
+    hd += cS("h", "합계(월간)") + cS("h", "산정기준") + "</Row>";
+    body += hd;
+    ROWS.forEach(function (d) {
+      var x = "<Row>" + cS("l", d.lbl);
       groups.forEach(function (g) {
         g.idx.forEach(function (i) {
           var c = agg.calc[i],
             r = rows[i];
-          var st = cN + (d.bold ? "font-weight:bold;" : "");
-          var val = d.type === "count" ? c.count || "-" : fmt(d.fn(c, r));
-          h += "<td style='" + st + "'>" + val + "</td>";
+          x += cN(d.f ? "c" : "n", d.val(c, r), d.f ? d.f(r) : null);
         });
-        var sv = d.type === "count" ? g.idx.reduce(function (a, i) {
-          return a + agg.calc[i].count;
-        }, 0) : d.type === "unit" ? null : g.idx.reduce(function (a, i) {
-          return a + d.fn(agg.calc[i], rows[i]) * agg.calc[i].count;
-        }, 0);
-        h += "<td style='" + cSub + "'>" + (sv == null ? "" : fmt(sv)) + "</td>";
-      });
-      var tv = d.type === "count" ? agg.totalHead : d.type === "unit" ? null : agg.calc.reduce(function (a, c, i) {
-        return a + d.fn(c, rows[i]) * c.count;
-      }, 0);
-      h += "<td style='" + cTot + "'>" + (tv == null ? "" : fmt(tv)) + "</td>";
-      h += "<td style='" + cL + "font-size:10px;color:#555;'>" + (d.basis || "") + "</td>";
-      return h;
-    }
-    var span = 2 + totalCols + 2;
-    var H = "<table style='border-collapse:collapse;font-family:맑은 고딕,Malgun Gothic;font-size:11px;'>";
-    H += "<tr><td colspan='" + span + "' style='font-size:17px;font-weight:bold;text-align:center;padding:10px;" + bd + "'>" + (title || "건물종합관리용역").replace(/</g, "&lt;") + " 용역 산출 내역서</td></tr>";
-    H += "<tr><td colspan='" + span + "' style='text-align:right;padding:3px 6px;" + bd + "'>작성일: " + new Date().toISOString().slice(0, 10) + "　(단위: 원 / 월)</td></tr>";
-    /* 헤더 2단 */
-    H += "<tr><td colspan='2' rowspan='2' style='" + cH + "'>구  분</td>";
-    groups.forEach(function (g) {
-      H += "<td colspan='" + (g.idx.length + 1) + "' style='" + cH + "'>" + g.nm + "</td>";
-    });
-    H += "<td rowspan='2' style='" + cH + "'>합계(월간)</td><td rowspan='2' style='" + cH + "'>산정기준</td></tr>";
-    H += "<tr>";
-    groups.forEach(function (g) {
-      g.idx.forEach(function (i) {
-        H += "<td style='" + cH + "'>" + (rows[i].label || "(직군)").replace(/</g, "&lt;") + "</td>";
-      });
-      H += "<td style='" + cH + "background:#cfe0f0;'>소계</td>";
-    });
-    H += "</tr>";
-    /* 본문 (대분류 세로 병합) */
-    var catCnt = {};
-    ROWS.forEach(function (d) {
-      if (d.cat) catCnt[d.cat] = (catCnt[d.cat] || 0) + 1;
-    });
-    var catSeen = {};
-    ROWS.forEach(function (d) {
-      H += "<tr>";
-      if (d.cat) {
-        if (!catSeen[d.cat]) {
-          catSeen[d.cat] = 1;
-          H += "<td rowspan='" + catCnt[d.cat] + "' style='" + cH + "'>" + d.cat + "</td>";
+        var n = g.idx.length;
+        if (d.kind === "unit") {
+          x += cE("s");
+        } else if (d.kind === "count") {
+          x += cN("s", g.idx.reduce(function (a, i) {
+            return a + agg.calc[i].count;
+          }, 0), "=SUM(RC[-" + n + "]:RC[-1])");
+        } else {
+          x += cN("s", g.idx.reduce(function (a, i) {
+            return a + d.val(agg.calc[i], rows[i]) * agg.calc[i].count;
+          }, 0), "=SUMPRODUCT(RC[-" + n + "]:RC[-1],R" + PR + "C[-" + n + "]:R" + PR + "C[-1])");
         }
-        H += "<td style='" + cL + "font-weight:bold;'>" + d.label + "</td>";
+      });
+      if (d.kind === "unit") {
+        x += cE("g");
       } else {
-        H += "<td colspan='2' style='" + cL + "font-weight:bold;background:#f2f2f2;'>" + d.label + "</td>";
+        var tv = d.kind === "count" ? agg.totalHead : agg.calc.reduce(function (a, c, i) {
+          return a + d.val(c, rows[i]) * c.count;
+        }, 0);
+        x += cN("g", tv, "=" + subCols.map(function (sc) {
+          return "RC[-" + (totalCol - sc) + "]";
+        }).join("+"));
       }
-      H += bodyCells(d);
-      H += "</tr>";
+      x += cS("b", d.basis || "") + "</Row>";
+      body += x;
     });
-    H += "</table>";
-    var html = "<html><head><meta charset='UTF-8'></head><body>" + H + "</body></html>";
-    var blob = new Blob(["﻿", html], {
+    var BRD = "<Borders><Border ss:Position=\"Bottom\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#999999\"/><Border ss:Position=\"Top\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#999999\"/><Border ss:Position=\"Left\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#999999\"/><Border ss:Position=\"Right\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#999999\"/></Borders>";
+    var styles = "<Styles>" + "<Style ss:ID=\"Default\" ss:Name=\"Normal\"><Alignment ss:Vertical=\"Center\"/><Font ss:FontName=\"맑은 고딕\" ss:Size=\"10\"/></Style>" + "<Style ss:ID=\"t\"><Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Center\"/>" + BRD + "<Font ss:FontName=\"맑은 고딕\" ss:Size=\"15\" ss:Bold=\"1\"/></Style>" + "<Style ss:ID=\"h\"><Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Center\" ss:WrapText=\"1\"/>" + BRD + "<Font ss:FontName=\"맑은 고딕\" ss:Size=\"10\" ss:Bold=\"1\"/><Interior ss:Color=\"#DBE5F1\" ss:Pattern=\"Solid\"/></Style>" + "<Style ss:ID=\"l\"><Alignment ss:Horizontal=\"Left\" ss:Vertical=\"Center\"/>" + BRD + "<Font ss:FontName=\"맑은 고딕\" ss:Size=\"10\" ss:Bold=\"1\"/></Style>" + "<Style ss:ID=\"n\"><Alignment ss:Horizontal=\"Right\" ss:Vertical=\"Center\"/>" + BRD + "<NumberFormat ss:Format=\"#,##0\"/></Style>" + "<Style ss:ID=\"c\"><Alignment ss:Horizontal=\"Right\" ss:Vertical=\"Center\"/>" + BRD + "<Interior ss:Color=\"#F2F7FC\" ss:Pattern=\"Solid\"/><NumberFormat ss:Format=\"#,##0\"/></Style>" + "<Style ss:ID=\"s\"><Alignment ss:Horizontal=\"Right\" ss:Vertical=\"Center\"/>" + BRD + "<Font ss:FontName=\"맑은 고딕\" ss:Size=\"10\" ss:Bold=\"1\"/><Interior ss:Color=\"#EAF2FB\" ss:Pattern=\"Solid\"/><NumberFormat ss:Format=\"#,##0\"/></Style>" + "<Style ss:ID=\"g\"><Alignment ss:Horizontal=\"Right\" ss:Vertical=\"Center\"/>" + BRD + "<Font ss:FontName=\"맑은 고딕\" ss:Size=\"10\" ss:Bold=\"1\"/><Interior ss:Color=\"#FFF2CC\" ss:Pattern=\"Solid\"/><NumberFormat ss:Format=\"#,##0\"/></Style>" + "<Style ss:ID=\"b\"><Alignment ss:Horizontal=\"Left\" ss:Vertical=\"Center\" ss:WrapText=\"1\"/>" + BRD + "<Font ss:FontName=\"맑은 고딕\" ss:Size=\"8\" ss:Color=\"#666666\"/></Style>" + "</Styles>";
+    var xml = "<?xml version=\"1.0\"?>\n<?mso-application progid=\"Excel.Sheet\"?>\n<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\">" + styles + "<Worksheet ss:Name=\"산출내역서\"><Table>" + body + "</Table></Worksheet></Workbook>";
+    var blob = new Blob(["﻿", xml], {
       type: "application/vnd.ms-excel;charset=utf-8"
     });
     var url = URL.createObjectURL(blob);
