@@ -104,6 +104,8 @@ function DelBtn(p){ return <button onClick={p.onClick} title="삭제" style={{ba
 var Q_DEF_SET={ weekHours:209, shiftHours:213, stdHours:9, minWage:10030,
   rPension:4.75, rAccident:0.860, rHealth:3.595, rEmploy:1.75, rCare:0.5, rBizTax:12.95,
   adminRate:5.0, profitRate:10.0, vat:10.0 };
+var Q_PANEL_KEYS=["weekHours","shiftHours","stdHours","minWage","rPension","rAccident","rHealth","rEmploy","rCare","rBizTax","vat"];
+function qPick(o){ var r={}; Q_PANEL_KEYS.forEach(function(k){ r[k]=o[k]; }); return r; }
 
 var Q_SEED_ROWS=[
   {id:"q1",label:"시설관리 (주간)",count:3,workType:"week",baseHours:209,stdHours:9,hourly:11000,basic:2400000,posPay:200000,qualPay:50000,otHours:0,otApply:false,ntHours:0,ntApply:false,annualDays:10},
@@ -213,6 +215,7 @@ function NameCell(p){ return <td style={Object.assign({},tdL,{fontWeight:600,pos
 
 function QuotationPage(){
   var _s=useState(Q_DEF_SET), set=_s[0], setSet=_s[1];
+  var _ds=useState(function(){return qPick(Q_DEF_SET);}), draft=_ds[0], setDraft=_ds[1];
   var _r=useState(Q_SEED_ROWS), rows=_r[0], setRows=_r[1];
   var _g=useState(Q_SEED_GEN), gen=_g[0], setGen=_g[1];
   var _o=useState(Q_SEED_OTH), oth=_o[0], setOth=_o[1];
@@ -250,6 +253,14 @@ function QuotationPage(){
   function addOth(){ setOth(function(p){return p.concat([{id:"o"+Date.now(),nm:"신규 기타경비",unit:0,qty:1}]);}); }
   function delOth(id){ setOth(function(p){return p.filter(function(o){return o.id!==id;});}); }
   function updSet(k,v){ setSet(function(p){return Object.assign({},p,mk(k,v));}); }
+  function updDraft(k,v){ setDraft(function(p){return Object.assign({},p,mk(k,v));}); }
+  function applySettings(){
+    setSet(function(p){return Object.assign({},p,draft);});
+    setRows(function(p){return p.map(function(r){return Object.assign({},r,{baseHours:r.workType==="shift"?draft.shiftHours:draft.weekHours,stdHours:draft.stdHours});});});
+    doToast("설정이 적용되어 왼쪽 표·계산에 반영되었습니다.");
+  }
+  function resetDraft(){ setDraft(qPick(set)); doToast("설정 입력을 되돌렸습니다."); }
+  var setDirty=Q_PANEL_KEYS.some(function(k){ return String(draft[k])!==String(set[k]); });
 
   function confirmSim(){ var m={}; sim.perRow.forEach(function(p){m[p.id]=p.newUnit;}); setConfirmed(m); doToast("조정 단가가 확정되었습니다. 엑셀에 반영됩니다."); }
   function resetSim(){ setTarget(null); setConfirmed(null); doToast("기준 단가로 초기화"); }
@@ -489,36 +500,43 @@ function QuotationPage(){
 
       </div>{/* ── 메인 컬럼 끝 ── */}
 
-      {/* 오른쪽 고정 설정 패널 */}
+      {/* 오른쪽 고정 설정 패널 (입력 → 적용 시 반영) */}
       <aside style={{width:272,flexShrink:0,position:"sticky",top:16,maxHeight:"calc(100vh - 32px)",overflowY:"auto"}}>
         <div style={{background:"#fff",border:"1px solid "+LINE,borderRadius:8,padding:16}}>
           <div style={{fontSize:14,fontWeight:800,color:INK,marginBottom:3}}>⚙ 설정</div>
-          <div style={{fontSize:10.5,color:SUB,marginBottom:14,lineHeight:1.5}}>법령·정책 변경 시 수정하면 전체 계산에 자동 반영됩니다.</div>
+          <div style={{fontSize:10.5,color:SUB,marginBottom:14,lineHeight:1.5}}>값을 입력한 뒤 <b style={{color:BLUE}}>적용(확인)</b>을 누르면 왼쪽 표·계산에 반영됩니다.</div>
 
           <div style={{marginBottom:16}}>
             <div style={grpTt}>근무 설정</div>
             {[["weekHours","주간직 기본시간"],["shiftHours","교대직 기본시간"],["stdHours","소정근로시간"]].map(function(f){
-              return <div key={f[0]} style={setRow}><span style={setLbl}>{f[1]}</span><NumInput w={86} value={set[f[0]]} onChange={function(v){updSet(f[0],v);}} /></div>;
+              return <div key={f[0]} style={setRow}><span style={setLbl}>{f[1]}</span><NumInput w={86} value={draft[f[0]]} onChange={function(v){updDraft(f[0],v);}} /></div>;
             })}
+            <div style={{fontSize:10,color:SUB,marginTop:2,lineHeight:1.5}}>· 적용 시 전 직군 근로시간이 갱신됩니다.</div>
           </div>
 
           <div style={{marginBottom:16}}>
             <div style={grpTt}>최저임금</div>
-            <div style={setRow}><span style={setLbl}>법정최저시급 (원)</span><NumInput w={86} value={set.minWage} onChange={function(v){updSet("minWage",v);}} /></div>
+            <div style={setRow}><span style={setLbl}>법정최저시급 (원)</span><NumInput w={86} value={draft.minWage} onChange={function(v){updDraft("minWage",v);}} /></div>
           </div>
 
           <div style={{marginBottom:16}}>
             <div style={grpTt}>4대보험 및 세금</div>
             {[["rPension","국민연금"],["rAccident","산재보험"],["rHealth","건강보험"],["rEmploy","고용보험"],["rCare","장기요양"],["rBizTax","사업소세"]].map(function(f){
-              return <div key={f[0]} style={setRow}><span style={setLbl}>{f[1]} (%)</span><PctInput w={86} value={set[f[0]]} onChange={function(v){updSet(f[0],v);}} /></div>;
+              return <div key={f[0]} style={setRow}><span style={setLbl}>{f[1]} (%)</span><PctInput w={86} value={draft[f[0]]} onChange={function(v){updDraft(f[0],v);}} /></div>;
             })}
             <div style={{fontSize:10,color:SUB,marginTop:4,lineHeight:1.5}}>· 국민연금~장기요양: 기본급여~연차수당 기준<br/>· 사업소세: 건강보험 기준</div>
           </div>
 
-          <div>
+          <div style={{marginBottom:14}}>
             <div style={grpTt}>부가가치세</div>
-            <div style={setRow}><span style={setLbl}>부가세 (%)</span><PctInput w={86} value={set.vat} onChange={function(v){updSet("vat",v);}} /></div>
+            <div style={setRow}><span style={setLbl}>부가세 (%)</span><PctInput w={86} value={draft.vat} onChange={function(v){updDraft("vat",v);}} /></div>
           </div>
+
+          <div style={{display:"flex",gap:8}}>
+            <button style={Object.assign({},bDef,{flex:1,padding:"9px 0",opacity:setDirty?1:0.5})} onClick={resetDraft}>되돌리기</button>
+            <button style={Object.assign({},bPri,{flex:1,padding:"9px 0"})} onClick={applySettings}>적용 (확인)</button>
+          </div>
+          {setDirty && <div style={{fontSize:10.5,color:WARN,marginTop:9,textAlign:"center",fontWeight:600}}>● 미적용 변경사항이 있습니다</div>}
         </div>
       </aside>
 
