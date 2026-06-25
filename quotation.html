@@ -57,6 +57,7 @@ var BLUE="#00478F", BLUED="#013a73", BLUEL="#eaf0f7", INK="#1f2937", SUB="#6b728
 
 /* ═══ 숫자 유틸 ═══ */
 function r10(n){ return Math.round((Number(n)||0)/10)*10; }   /* ROUND(x,-1) */
+function r1000(n){ return Math.round((Number(n)||0)/1000)*1000; }   /* ROUND(x,-3) */
 function r0(n){ return Math.round(Number(n)||0); }            /* ROUND(x,0) */
 function nf(n){ return Math.round(Number(n)||0).toLocaleString("ko-KR"); }
 function won(n){ return "₩"+nf(n); }
@@ -180,7 +181,7 @@ function qCalcAll(rows,s,catalog){
     c.junggye=c.directSum+c.indirectSum+c.etc;                  /* 중계 = 직접+간접+기타 */
     c.admin=r0(c.junggye*s.adminRate/100);                      /* 일반관리비 */
     c.profit=r0((c.junggye+c.admin)*s.profitRate/100);          /* 기업이윤 */
-    c.exVat=c.junggye+c.admin+c.profit;                         /* 부가세별도 (1인) */
+    c.exVat=r1000(c.junggye+c.admin+c.profit);                  /* 부가세별도 (1인) = ROUND(중계+관리비+이윤, -3) */
     c.inVat=r0(c.exVat*(1+s.vat/100));                          /* 부가세포함 (1인) */
     c.rowExVat=c.exVat*cnt; c.rowInVat=c.inVat*cnt; c.rowIndirect=c.indirectSum*cnt;
     return c;
@@ -571,7 +572,7 @@ function QuotationPage(){
             var c=agg.calc[i];
             return <tr key={r.id}><NameCell label={r.label} count={r.count} /><td style={tdS}>{nf(c.directSum)}</td><td style={tdS}>{nf(c.indirectSum)}</td><td style={tdS}>{nf(c.etc)}</td><td style={Object.assign({},tdS,{fontWeight:700})}>{nf(c.junggye)}</td></tr>;
           })}</tbody>
-          <tfoot><tr><td style={tfL}>합계</td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.directSum*c.count;},0))}</td><td style={tfR}>{nf(agg.totalIndirect)}</td><td style={tfR}>{nf(agg.etcTotal)}</td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.junggye*c.count;},0))}</td></tr></tfoot>
+          <tfoot><tr><td style={tfL}>합계 (1인 단가 합)</td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.directSum;},0))}</td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.indirectSum;},0))}</td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.etc;},0))}</td><td style={tfR}>{nf(agg.calc.reduce(function(a,c){return a+c.junggye;},0))}</td></tr></tfoot>
         </table></div>}
       </div>
 
