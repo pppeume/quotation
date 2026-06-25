@@ -115,11 +115,14 @@ function saveHistLS(h){ try{ if(window.localStorage) localStorage.setItem("quota
 /* 직군 구분 및 직군별 단가 카탈로그 */
 var Q_AREAS=["시설","미화","보안","식음"];
 function defCatalog(){
-  var gen=[{nm:"피복비",unit:120000},{nm:"특수검진비",unit:80000},{nm:"선물비",unit:100000},{nm:"운영비",unit:50000}];
-  var oth=[{nm:"명절선물",unit:100000},{nm:"법정교육비",unit:30000},{nm:"수수료",unit:30000},{nm:"식대",unit:220000}];
-  var c={};
-  Q_AREAS.forEach(function(a){ c[a]={gen:gen.map(function(x){return {id:uid("cg"),nm:x.nm,unit:x.unit};}),oth:oth.map(function(x){return {id:uid("co"),nm:x.nm,unit:x.unit};})}; });
-  return c;
+  function g(nm,unit){return {id:uid("cg"),nm:nm,unit:unit};}
+  function o(nm,unit){return {id:uid("co"),nm:nm,unit:unit};}
+  return {
+    "시설":{gen:[g("피복비",30000),g("특수검진비",5667),g("선물비",15000),g("운영비",40000)],oth:[o("수수료",71267),o("식대",0)]},
+    "미화":{gen:[g("피복비",20000),g("선물비",15000),g("운영비",40000)],oth:[o("수수료",71267),o("식대",0)]},
+    "보안":{gen:[g("피복비",40000),g("특수검진비",6375),g("선물비",15000),g("운영비",40000)],oth:[o("수수료",71267),o("식대",0)]},
+    "식음":{gen:[g("피복비",20000),g("선물비",15000),g("운영비",40000)],oth:[o("수수료",71267),o("식대",0)]}
+  };
 }
 
 /* 새 인원(직군) 행 — 인원 추가 시 제경비·기타경비 1줄씩 자동 생성 */
@@ -229,7 +232,7 @@ function QuotationPage(){
   var _ts=useState(null), toast=_ts[0], setToast=_ts[1];
   var _ti=useState(""), title=_ti[0], setTitle=_ti[1];
   var _hi=useState(function(){return loadHist();}), hist=_hi[0], setHist=_hi[1];
-  var _shh=useState(false), showHist=_shh[0], setShowHist=_shh[1];
+  var _ch=useState(null), curHistId=_ch[0], setCurHistId=_ch[1];
   function doToast(m){ setToast(m); setTimeout(function(){setToast(null);},2500); }
   function mk(k,v){var o={};o[k]=v;return o;}
 
@@ -273,9 +276,10 @@ function QuotationPage(){
 
   function applySim(){ setRows(simRows); setSimPct(0); doToast("조정된 기본급여가 적용되어 ①~⑥ 전체에 반영되었습니다."); }
   function resetSim(){ setSimPct(0); doToast("기준(0%)으로 초기화"); }
-  function doSave(){ var e={id:uid("h"),title:title||"제목 없음",savedAt:new Date().toLocaleString("ko-KR"),total:agg.totalExVat,head:agg.totalHead,rows:clone(rows),set:clone(set),catalog:clone(catalog)}; var nh=[e].concat(hist); setHist(nh); saveHistLS(nh); doToast("견적서가 저장되었습니다."); }
-  function doLoadHist(e){ setRows(clone(e.rows||[])); setSet(clone(e.set||Q_DEF_SET)); setDraft(qPick(e.set||Q_DEF_SET)); if(e.catalog) setCatalog(clone(e.catalog)); setTitle(e.title||""); setSimPct(0); setShowHist(false); doToast("저장된 견적서를 불러왔습니다."); }
-  function doDelHist(id){ var nh=hist.filter(function(x){return x.id!==id;}); setHist(nh); saveHistLS(nh); doToast("삭제되었습니다."); }
+  function doSave(){ var id=curHistId&&hist.some(function(x){return x.id===curHistId;})?curHistId:uid("h"); var e={id:id,title:title||"제목 없음",savedAt:new Date().toLocaleString("ko-KR"),total:agg.totalExVat,head:agg.totalHead,rows:clone(rows),set:clone(set),catalog:clone(catalog)}; var nh=[e].concat(hist.filter(function(x){return x.id!==id;})); setHist(nh); saveHistLS(nh); setCurHistId(id); doToast("견적서가 저장되었습니다."); }
+  function doLoadHist(e){ setRows(clone(e.rows||[])); setSet(clone(e.set||Q_DEF_SET)); setDraft(qPick(e.set||Q_DEF_SET)); if(e.catalog) setCatalog(clone(e.catalog)); setTitle(e.title||""); setCurHistId(e.id); setSimPct(0); doToast("저장된 견적서를 불러왔습니다."); }
+  function newQuote(){ setRows([]); setTitle(""); setCurHistId(null); setSimPct(0); doToast("새 견적서를 시작합니다."); }
+  function doDelHist(id){ var nh=hist.filter(function(x){return x.id!==id;}); setHist(nh); saveHistLS(nh); if(curHistId===id) setCurHistId(null); doToast("삭제되었습니다."); }
 
   var sumCard={background:"#fff",border:"1px solid "+LINE,borderRadius:8,padding:"14px 16px"};
   var sumLbl={fontSize:11.5,color:SUB,marginBottom:5};
@@ -287,13 +291,32 @@ function QuotationPage(){
 
   return (
     <div style={{display:"flex",gap:16,alignItems:"flex-start"}}>
+    {/* 왼쪽 견적 이력 사이드바 */}
+    <aside style={{width:212,flexShrink:0,position:"sticky",top:16,maxHeight:"calc(100vh - 32px)",overflowY:"auto"}}>
+      <div style={{background:"#fff",border:"1px solid "+LINE,borderRadius:8,padding:12}}>
+        <div style={{fontSize:13,fontWeight:800,color:INK,marginBottom:10}}>🕘 견적 이력</div>
+        <button style={Object.assign({},bPri,{width:"100%",padding:"8px 0",marginBottom:10})} onClick={newQuote}>+ 새 견적</button>
+        {hist.length===0 ? <div style={{fontSize:11,color:SUB,textAlign:"center",padding:"16px 4px",lineHeight:1.6}}>저장된 견적이 없습니다.<br/>제목 입력 후 💾 저장하세요.</div> :
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {hist.map(function(e){
+            var on=curHistId===e.id;
+            return <div key={e.id} onClick={function(){doLoadHist(e);}} style={{cursor:"pointer",padding:"9px 10px",borderRadius:7,border:"1px solid "+(on?BLUE:LINE),background:on?BLUEL:"#fff",position:"relative"}}>
+              <div style={{fontSize:12.5,fontWeight:700,color:on?BLUE:INK,paddingRight:16,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.title}</div>
+              <div style={{fontSize:10,color:SUB,marginTop:3}}>{e.savedAt}</div>
+              <div style={{fontSize:10.5,color:INK,marginTop:1,fontWeight:600}}>{won(e.total)} · {e.head}명</div>
+              <button onClick={function(ev){ev.stopPropagation();doDelHist(e.id);}} title="삭제" style={{position:"absolute",top:6,right:6,background:"transparent",border:"none",color:SUB,cursor:"pointer",fontSize:12,lineHeight:1}}>✕</button>
+            </div>;
+          })}
+        </div>}
+      </div>
+    </aside>
+
     <div style={{flex:1,minWidth:0}}>
-      {/* 견적서 제목 · 히스토리 */}
+      {/* 견적서 제목 */}
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-        <span style={{fontSize:13,fontWeight:700,color:BLUE,whiteSpace:"nowrap"}}>📋 견적서</span>
+        <span style={{fontSize:13,fontWeight:700,color:BLUE,whiteSpace:"nowrap"}}>📋 견적서 제목</span>
         <input value={title} onChange={function(e){setTitle(e.target.value);}} placeholder="견적서 제목 입력 (예: 마곡연구소 건물관리 2026)" style={{flex:1,minWidth:220,padding:"10px 14px",borderRadius:7,border:"1px solid "+LINE,fontSize:14.5,fontWeight:700,color:INK}} />
-        <button style={bDef} onClick={doSave}>💾 저장</button>
-        <button style={Object.assign({},bSm,{padding:"8px 14px"})} onClick={function(){setShowHist(true);}}>🕘 히스토리 ({hist.length})</button>
+        <button style={bPri} onClick={doSave}>💾 저장</button>
       </div>
       {/* 상단 요약 */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
@@ -587,29 +610,6 @@ function QuotationPage(){
           {setDirty && <div style={{fontSize:10.5,color:WARN,marginTop:9,textAlign:"center",fontWeight:600}}>● 미적용 변경사항이 있습니다</div>}
         </div>
       </aside>
-
-      {showHist && <div onClick={function(){setShowHist(false);}} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",zIndex:1500,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"60px 16px",overflow:"auto"}}>
-        <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:10,width:680,maxWidth:"100%",padding:22}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-            <div style={{fontSize:16,fontWeight:800,color:INK}}>🕘 견적서 히스토리</div>
-            <button onClick={function(){setShowHist(false);}} style={{background:"#f1f5f4",border:"none",cursor:"pointer",padding:"6px 11px",borderRadius:7,fontSize:15}}>✕</button>
-          </div>
-          <div style={{fontSize:11.5,color:SUB,marginBottom:14}}>저장한 견적서를 불러오면 현재 작업 내용이 교체됩니다. (이 브라우저에 저장됩니다)</div>
-          {hist.length===0 ? <div style={emptyBox}>저장된 견적서가 없습니다. 제목을 입력하고 💾 저장을 눌러보세요.</div> :
-          <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:"55vh",overflowY:"auto"}}>
-            {hist.map(function(e){
-              return <div key={e.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",border:"1px solid "+LINE,borderRadius:8}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13.5,fontWeight:700,color:INK}}>{e.title}</div>
-                  <div style={{fontSize:11,color:SUB,marginTop:2}}>{e.savedAt} · {e.head}명 · {won(e.total)} (부가세 별도)</div>
-                </div>
-                <button style={bSm} onClick={function(){doLoadHist(e);}}>불러오기</button>
-                <button style={Object.assign({},bDef,{color:WARN,borderColor:"#f0c9c5"})} onClick={function(){doDelHist(e.id);}}>삭제</button>
-              </div>;
-            })}
-          </div>}
-        </div>
-      </div>}
 
       {showCat && <div onClick={function(){setShowCat(false);}} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",zIndex:1500,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"50px 16px",overflow:"auto"}}>
         <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:10,width:760,maxWidth:"100%",padding:22}}>
