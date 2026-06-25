@@ -129,8 +129,10 @@ function newRow(s){
     genItems:[{id:uid("gi"),nm:"",unit:"",qty:1}], othItems:[{id:uid("oi"),nm:"",unit:"",qty:1}]};
 }
 
+/* 직군 카탈로그에서 종류명으로 단가 조회 */
+function qUnit(list,nm){ var it=(list||[]).filter(function(x){return x.nm===nm;})[0]; return it?(Number(it.unit)||0):0; }
 /* 한 인원(직군) 행의 모든 파생값 — 모든 금액은 1인 기준 */
-function qCalcRow(r,s){
+function qCalcRow(r,s,catalog){
   var baseHours = Number(r.baseHours)||(r.workType==="shift"?s.shiftHours:s.weekHours);
   var stdHours = Number(r.stdHours)||s.stdHours;
   var basic=Number(r.basic)||0, pos=Number(r.posPay)||0, qual=Number(r.qualPay)||0;
@@ -147,19 +149,20 @@ function qCalcRow(r,s){
       health=r0(directBase*s.rHealth/100), employ=r0(directBase*s.rEmploy/100),
       care=r0(directBase*s.rCare/100), bizTax=r0(health*s.rBizTax/100);
   var indirectSum = pension+accident+health+employ+care+bizTax;
-  /* 기타비용 — 각 직군 행에 개별 입력 (1인당 단가) */
-  var etcGenPer=(r.genItems||[]).reduce(function(a,g){return a+(Number(g.unit)||0)*(Number(g.qty)||0);},0);
-  var etcOthPer=(r.othItems||[]).reduce(function(a,o){return a+(Number(o.unit)||0)*(Number(o.qty)||0);},0);
+  /* 기타비용 — 직군 카탈로그 단가 × 수량 (1인당), 카탈로그 변경 시 자동 반영 */
+  var ar=(catalog&&catalog[r.area])||{gen:[],oth:[]};
+  var etcGenPer=(r.genItems||[]).reduce(function(a,g){return a+qUnit(ar.gen,g.nm)*(Number(g.qty)||0);},0);
+  var etcOthPer=(r.othItems||[]).reduce(function(a,o){return a+qUnit(ar.oth,o.nm)*(Number(o.qty)||0);},0);
   return {baseHours:baseHours,stdHours:stdHours,common:common,hourly:hourly,ot:ot,nt:nt,annual:annual,
     directBase:directBase,retire:retire,directSum:directSum,monthlyPay:monthlyPay,pension:pension,accident:accident,
     health:health,employ:employ,care:care,bizTax:bizTax,indirectSum:indirectSum,
     etcGenPer:etcGenPer,etcOthPer:etcOthPer,etc:etcGenPer+etcOthPer,belowMin:hourly<s.minWage};
 }
 
-function qCalcAll(rows,s){
+function qCalcAll(rows,s,catalog){
   var totalHead=rows.reduce(function(a,r){return a+(Number(r.count)||0);},0);
   var calc=rows.map(function(r){
-    var c=qCalcRow(r,s);
+    var c=qCalcRow(r,s,catalog);
     var cnt=Number(r.count)||0; c.count=cnt;
     c.rowEtc=c.etc*cnt;
     c.junggye=c.directSum+c.indirectSum+c.etc;                  /* 중계 = 직접+간접+기타 */
@@ -178,7 +181,7 @@ function qCalcAll(rows,s){
 }
 
 /* 엑셀(견적서 양식) 다운로드 — 외부 라이브러리 없이 .xls(HTML) 생성 */
-function qExportExcel(rows,s,agg,prices){
+function qExportExcel(rows,s,agg,catalog){
   var th="border:1px solid #999;padding:5px 8px;background:#dbe5f1;font-weight:bold;text-align:center;";
   var td="border:1px solid #999;padding:5px 8px;text-align:right;";
   var tdL="border:1px solid #999;padding:5px 8px;text-align:left;";
@@ -189,18 +192,19 @@ function qExportExcel(rows,s,agg,prices){
   h+="<tr>"+["직군/구분","인원","월급여","직접인건비","간접인건비","기타비용","중계","일반관리비","기업이윤","1인 단가(부가세별도)","행 합계(부가세별도)","부가세포함"].map(function(x){return "<th style='"+th+"'>"+x+"</th>";}).join("")+"</tr>";
   rows.forEach(function(r,i){
     var c=agg.calc[i];
-    var unit=prices&&prices[r.id]!=null?prices[r.id]:c.exVat;
+    var unit=c.exVat;
     var rowSum=unit*c.count;
     h+="<tr><td style='"+tdL+"'>"+(r.label||"(직군명)")+"</td><td style='"+td+"'>"+c.count+"</td><td style='"+td+"'>"+nf(c.monthlyPay)+"</td><td style='"+td+"'>"+nf(c.directSum)+"</td><td style='"+td+"'>"+nf(c.indirectSum)+"</td><td style='"+td+"'>"+nf(c.etc)+"</td><td style='"+td+"'>"+nf(c.junggye)+"</td><td style='"+td+"'>"+nf(c.admin)+"</td><td style='"+td+"'>"+nf(c.profit)+"</td><td style='"+td+"'>"+nf(unit)+"</td><td style='"+td+"'>"+nf(rowSum)+"</td><td style='"+td+"'>"+nf(r0(rowSum*(1+s.vat/100)))+"</td></tr>";
   });
-  var gExVat=prices?rows.reduce(function(a,r,i){var u=prices[r.id]!=null?prices[r.id]:agg.calc[i].exVat;return a+u*agg.calc[i].count;},0):agg.totalExVat;
+  var gExVat=agg.totalExVat;
   h+="<tr><td colspan='10' style='"+th+"text-align:right;'>합계 (부가세 별도)</td><td colspan='2' style='"+td+"font-weight:bold;'>"+nf(gExVat)+"</td></tr>";
   h+="<tr><td colspan='10' style='"+th+"text-align:right;'>합계 (부가세 포함)</td><td colspan='2' style='"+td+"font-weight:bold;'>"+nf(r0(gExVat*(1+s.vat/100)))+"</td></tr></table>";
   h+="<br/><table style='border-collapse:collapse;font-family:맑은 고딕;font-size:12px;'><tr><td colspan='5' style='font-weight:bold;padding:6px;'>[ 기타비용 내역 (직군별, 1인당 단가) ]</td></tr>";
   h+="<tr><th style='"+th+"'>직군</th><th style='"+th+"'>구분</th><th style='"+th+"'>항목</th><th style='"+th+"'>단가 × 수량</th><th style='"+th+"'>1인당 금액</th></tr>";
   rows.forEach(function(r){
-    (r.genItems||[]).forEach(function(g){ h+="<tr><td style='"+tdL+"'>"+(r.label||"")+"</td><td style='"+tdL+"'>제경비</td><td style='"+tdL+"'>"+(g.nm||"")+"</td><td style='"+td+"'>"+nf(g.unit)+" × "+(Number(g.qty)||0)+"</td><td style='"+td+"'>"+nf((Number(g.unit)||0)*(Number(g.qty)||0))+"</td></tr>"; });
-    (r.othItems||[]).forEach(function(o){ h+="<tr><td style='"+tdL+"'>"+(r.label||"")+"</td><td style='"+tdL+"'>기타경비</td><td style='"+tdL+"'>"+(o.nm||"")+"</td><td style='"+td+"'>"+nf(o.unit)+" × "+(Number(o.qty)||0)+"</td><td style='"+td+"'>"+nf((Number(o.unit)||0)*(Number(o.qty)||0))+"</td></tr>"; });
+    var ar=(catalog&&catalog[r.area])||{gen:[],oth:[]};
+    (r.genItems||[]).forEach(function(g){ var u=qUnit(ar.gen,g.nm); h+="<tr><td style='"+tdL+"'>"+(r.label||"")+"</td><td style='"+tdL+"'>제경비</td><td style='"+tdL+"'>"+(g.nm||"")+"</td><td style='"+td+"'>"+nf(u)+" × "+(Number(g.qty)||0)+"</td><td style='"+td+"'>"+nf(u*(Number(g.qty)||0))+"</td></tr>"; });
+    (r.othItems||[]).forEach(function(o){ var u=qUnit(ar.oth,o.nm); h+="<tr><td style='"+tdL+"'>"+(r.label||"")+"</td><td style='"+tdL+"'>기타경비</td><td style='"+tdL+"'>"+(o.nm||"")+"</td><td style='"+td+"'>"+nf(u)+" × "+(Number(o.qty)||0)+"</td><td style='"+td+"'>"+nf(u*(Number(o.qty)||0))+"</td></tr>"; });
   });
   h+="</table>";
   var html="<html><head><meta charset='UTF-8'></head><body>"+h+"</body></html>";
@@ -229,12 +233,12 @@ function QuotationPage(){
   function doToast(m){ setToast(m); setTimeout(function(){setToast(null);},2500); }
   function mk(k,v){var o={};o[k]=v;return o;}
 
-  var agg=useMemo(function(){return qCalcAll(rows,set);},[rows,set]);
+  var agg=useMemo(function(){return qCalcAll(rows,set,catalog);},[rows,set,catalog]);
   var empty=rows.length===0;
   /* 시뮬레이션: 기본급여를 simPct(%) 만큼 조정 → 전체 재계산 */
   var simFactor=1+simPct/100;
   var simRows=useMemo(function(){return rows.map(function(r){return Object.assign({},r,{basic:r0((Number(r.basic)||0)*simFactor)});});},[rows,simFactor]);
-  var simAgg=useMemo(function(){return qCalcAll(simRows,set);},[simRows,set]);
+  var simAgg=useMemo(function(){return qCalcAll(simRows,set,catalog);},[simRows,set,catalog]);
 
   /* 인원 행 */
   function updRow(id,k,v){ setRows(function(p){return p.map(function(r){return r.id===id?Object.assign({},r,mk(k,v)):r;});}); }
@@ -250,8 +254,8 @@ function QuotationPage(){
   function addOthItem(rid){ setRows(function(p){return p.map(function(r){return r.id!==rid?r:Object.assign({},r,{othItems:r.othItems.concat([{id:uid("oi"),nm:"",unit:"",qty:1}])});});}); }
   function delOthItem(rid,iid){ setRows(function(p){return p.map(function(r){return r.id!==rid?r:Object.assign({},r,{othItems:r.othItems.filter(function(o){return o.id!==iid;})});});}); }
   /* 카탈로그에서 종류 선택 → 단가 자동 */
-  function selGenItem(rid,iid,nm,unit){ setRows(function(p){return p.map(function(r){return r.id!==rid?r:Object.assign({},r,{genItems:r.genItems.map(function(g){return g.id===iid?Object.assign({},g,{nm:nm,unit:unit}):g;})});});}); }
-  function selOthItem(rid,iid,nm,unit){ setRows(function(p){return p.map(function(r){return r.id!==rid?r:Object.assign({},r,{othItems:r.othItems.map(function(o){return o.id===iid?Object.assign({},o,{nm:nm,unit:unit}):o;})});});}); }
+  function selGenItem(rid,iid,nm){ setRows(function(p){return p.map(function(r){return r.id!==rid?r:Object.assign({},r,{genItems:r.genItems.map(function(g){return g.id===iid?Object.assign({},g,{nm:nm}):g;})});});}); }
+  function selOthItem(rid,iid,nm){ setRows(function(p){return p.map(function(r){return r.id!==rid?r:Object.assign({},r,{othItems:r.othItems.map(function(o){return o.id===iid?Object.assign({},o,{nm:nm}):o;})});});}); }
   /* 카탈로그 편집 */
   function updCat(area,type,iid,k,v){ setCatalog(function(p){var c=clone(p); c[area][type]=c[area][type].map(function(x){return x.id===iid?Object.assign({},x,mk(k,v)):x;}); return c;}); }
   function addCat(area,type){ setCatalog(function(p){var c=clone(p); c[area][type]=c[area][type].concat([{id:uid("c"),nm:"",unit:0}]); return c;}); }
@@ -399,11 +403,12 @@ function QuotationPage(){
                   <table style={stbl}><thead><tr><th style={Object.assign({},thL,{fontSize:10.5})}>종류</th><th style={Object.assign({},thS,{fontSize:10.5})}>단가(자동)</th><th style={Object.assign({},thS,{fontSize:10.5})}>수량</th><th style={Object.assign({},thS,{fontSize:10.5})}>금액</th><th style={thC}></th></tr></thead>
                     <tbody>{r.genItems.map(function(g){
                       var cg=(catalog[r.area]&&catalog[r.area].gen)||[];
+                      var gu=qUnit(cg,g.nm);
                       return <tr key={g.id}>
-                        <td style={tdL}><select value={g.nm} onChange={function(e){var nm=e.target.value;var it=cg.filter(function(x){return x.nm===nm;})[0];selGenItem(r.id,g.id,nm,it?it.unit:0);}} style={{width:118,padding:"6px",borderRadius:5,border:"1px solid "+LINE,fontSize:12}}><option value="">종류 선택</option>{cg.map(function(x){return <option key={x.id} value={x.nm}>{x.nm}</option>;})}</select></td>
-                        <td style={tdS}>{g.nm?nf(g.unit):<span style={{color:SUB}}>-</span>}</td>
+                        <td style={tdL}><select value={g.nm} onChange={function(e){selGenItem(r.id,g.id,e.target.value);}} style={{width:118,padding:"6px",borderRadius:5,border:"1px solid "+LINE,fontSize:12}}><option value="">종류 선택</option>{cg.map(function(x){return <option key={x.id} value={x.nm}>{x.nm}</option>;})}</select></td>
+                        <td style={tdS}>{g.nm?nf(gu):<span style={{color:SUB}}>-</span>}</td>
                         <td style={tdS}><NumInput w={42} value={g.qty} onChange={function(v){updGenItem(r.id,g.id,"qty",v);}} /></td>
-                        <td style={Object.assign({},tdS,{fontWeight:600})}>{nf((Number(g.unit)||0)*(Number(g.qty)||0))}</td>
+                        <td style={Object.assign({},tdS,{fontWeight:600})}>{nf(gu*(Number(g.qty)||0))}</td>
                         <td style={tdC}><DelBtn onClick={function(){delGenItem(r.id,g.id);}} /></td>
                       </tr>;
                     })}</tbody>
@@ -415,11 +420,12 @@ function QuotationPage(){
                   <table style={stbl}><thead><tr><th style={Object.assign({},thL,{fontSize:10.5})}>종류</th><th style={Object.assign({},thS,{fontSize:10.5})}>단가(자동)</th><th style={Object.assign({},thS,{fontSize:10.5})}>수량</th><th style={Object.assign({},thS,{fontSize:10.5})}>금액</th><th style={thC}></th></tr></thead>
                     <tbody>{r.othItems.map(function(o){
                       var co=(catalog[r.area]&&catalog[r.area].oth)||[];
+                      var ou=qUnit(co,o.nm);
                       return <tr key={o.id}>
-                        <td style={tdL}><select value={o.nm} onChange={function(e){var nm=e.target.value;var it=co.filter(function(x){return x.nm===nm;})[0];selOthItem(r.id,o.id,nm,it?it.unit:0);}} style={{width:118,padding:"6px",borderRadius:5,border:"1px solid "+LINE,fontSize:12}}><option value="">종류 선택</option>{co.map(function(x){return <option key={x.id} value={x.nm}>{x.nm}</option>;})}</select></td>
-                        <td style={tdS}>{o.nm?nf(o.unit):<span style={{color:SUB}}>-</span>}</td>
+                        <td style={tdL}><select value={o.nm} onChange={function(e){selOthItem(r.id,o.id,e.target.value);}} style={{width:118,padding:"6px",borderRadius:5,border:"1px solid "+LINE,fontSize:12}}><option value="">종류 선택</option>{co.map(function(x){return <option key={x.id} value={x.nm}>{x.nm}</option>;})}</select></td>
+                        <td style={tdS}>{o.nm?nf(ou):<span style={{color:SUB}}>-</span>}</td>
                         <td style={tdS}><NumInput w={42} value={o.qty} onChange={function(v){updOthItem(r.id,o.id,"qty",v);}} /></td>
-                        <td style={Object.assign({},tdS,{fontWeight:600})}>{nf((Number(o.unit)||0)*(Number(o.qty)||0))}</td>
+                        <td style={Object.assign({},tdS,{fontWeight:600})}>{nf(ou*(Number(o.qty)||0))}</td>
                         <td style={tdC}><DelBtn onClick={function(){delOthItem(r.id,o.id);}} /></td>
                       </tr>;
                     })}</tbody>
@@ -535,7 +541,7 @@ function QuotationPage(){
           <div style={{fontSize:13.5,fontWeight:700,color:INK}}>견적서 엑셀 다운로드</div>
           <div style={{fontSize:11.5,color:SUB,marginTop:3}}>{empty?"① 인원을 추가한 뒤 다운로드할 수 있습니다.":"현재 표 기준으로 출력됩니다. (시뮬레이션은 「적용」 후 반영)"}</div>
         </div>
-        <button style={Object.assign({},bPri,{padding:"10px 20px",opacity:empty?0.5:1})} disabled={empty} onClick={function(){if(empty)return;qExportExcel(rows,set,agg);doToast("견적서 엑셀이 생성되었습니다.");}}>⬇ 엑셀(.xls) 다운로드</button>
+        <button style={Object.assign({},bPri,{padding:"10px 20px",opacity:empty?0.5:1})} disabled={empty} onClick={function(){if(empty)return;qExportExcel(rows,set,agg,catalog);doToast("견적서 엑셀이 생성되었습니다.");}}>⬇ 엑셀(.xls) 다운로드</button>
       </div>
 
       </div>{/* ── 메인 컬럼 끝 ── */}
